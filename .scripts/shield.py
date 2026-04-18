@@ -97,9 +97,13 @@ class ChatShield:
 
     def load_database(self):
         """Charge la liste des mots bannis/suspects"""
-        if os.path.exists(self.db_path):
-            with open(self.db_path, "r", encoding="utf-8") as f:
-                self.blacklist = [l.strip().lower() for l in f if l.strip() and not l.startswith("#")]
+        if not os.path.exists(self.db_path):
+            # Créer un fichier vide si absent pour éviter les erreurs
+            with open(self.db_path, "w", encoding="utf-8") as f:
+                f.write("# Liste des mots bannis (un par ligne)\n")
+        
+        with open(self.db_path, "r", encoding="utf-8") as f:
+            self.blacklist = [l.strip().lower() for l in f if l.strip() and not l.startswith("#")]
                 
     def reload_database(self):
         """RELOAD v1.4.0 : Rafraîchit tout sans redémarrer le bot"""
