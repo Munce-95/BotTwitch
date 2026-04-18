@@ -149,6 +149,14 @@ class MusicManager:
             self.handle_wrongsong(user, message[10:].strip(), tags, callback)
             return True
 
+        elif l_msg == '!skipsong' and is_privileged:
+            try:
+                self.sp.next_track()
+                callback("⏭️ Skip effectué.")
+            except Exception as e:
+                callback("❌ Erreur lors du skip (Lecteur inactif ?).")
+            return True 
+
         return False
 
     def handle_sr(self, user, query, tags, send_msg_func):

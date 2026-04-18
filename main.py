@@ -64,7 +64,7 @@ class TwitchBot(TwitchBase):
             return
         
         # Lance le nettoyeur de playlist en arrière-plan
-        self.music.start_cleaner()
+        self.music.start_worker()
 
         print(f"🚀 Bot prêt et connecté sur le channel : {TWITCH_CHANNEL}")
 
