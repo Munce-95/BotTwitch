@@ -30,6 +30,8 @@ dist/
 # On ignore les données privées des viewers
 .data/viewer.txt
 .data/music_cache.json
+.data/banwords.txt
+.data/whitelist.txt
 
 # Optionnel : Si tu veux que ton ami ait un dossier .data vide sur GitHub
 # mais sans tes fichiers de logs/viewers, tu peux décommenter la ligne suivante :
