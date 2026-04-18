@@ -14,7 +14,7 @@ class ChatShield:
         # Domaines autorisés (Whitelist)
         self.safe_domains = [
             "twitch.tv", "youtube.com", "youtu.be", "spotify.link",
-            "googleusercontent.com", "spotify.com" # Simplifié pour couvrir tous les liens Spotify
+            "googleusercontent.com", "spotify.com" 
         ]
         
         # Liste d'immunité : si ces mots sont présents, on est plus indulgent
@@ -31,6 +31,7 @@ class ChatShield:
         self.purge_old_viewers(days=30)
 
     def load_viewers(self):
+        """Charge les données des viewers depuis le fichier texte"""
         if os.path.exists(self.viewers_path):
             with open(self.viewers_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -45,13 +46,14 @@ class ChatShield:
                         except ValueError: continue
 
     def save_data(self):
-        # On s'assure que le dossier existe avant d'écrire
+        """Sauvegarde les données des viewers"""
         os.makedirs(os.path.dirname(self.viewers_path), exist_ok=True)
         with open(self.viewers_path, "w", encoding="utf-8") as f:
             for user, data in self.viewers_data.items():
                 f.write(f"{user}:{data[0]}:{data[1]}:{data[2]}\n")
 
     def purge_old_viewers(self, days=30):
+        """Supprime les viewers inactifs pour ne pas alourdir le fichier"""
         limit_date = datetime.now() - timedelta(days=days)
         to_delete = []
         for user, data in self.viewers_data.items():
@@ -64,6 +66,7 @@ class ChatShield:
         if to_delete: self.save_data()
 
     def update_user(self, user, is_privileged=False, new_score=None):
+        """Met à jour le score et l'activité d'un utilisateur"""
         user = user.lower()
         today = datetime.now().strftime("%Y-%m-%d")
         if user not in self.viewers_data:
@@ -78,17 +81,14 @@ class ChatShield:
         self.viewers_data[user][2] = today
         score_actuel = self.viewers_data[user][0]
         
-        # Un utilisateur privilégié (Modo/VIP) passe/reste au score 3 (Confiance totale)
         if is_privileged:
             self.viewers_data[user][0] = 3
         elif score_actuel == 3:
-            # Si un ancien modo redevient viewer normal, on garde un score élevé s'il a beaucoup parlé
             self.viewers_data[user][0] = 2 if self.viewers_data[user][1] >= 50 else 1
 
         self.viewers_data[user][1] += 1
         count = self.viewers_data[user][1]
         
-        # Évolution naturelle du score
         if self.viewers_data[user][0] == 0 and count % 3 == 0:
             self.viewers_data[user][0] = 1
         if self.viewers_data[user][0] == 1 and count >= 50:
@@ -96,16 +96,21 @@ class ChatShield:
         self.save_data()
 
     def load_database(self):
+        """Charge la liste des mots bannis/suspects"""
         if os.path.exists(self.db_path):
             with open(self.db_path, "r", encoding="utf-8") as f:
                 self.blacklist = [l.strip().lower() for l in f if l.strip() and not l.startswith("#")]
                 
     def reload_database(self):
+        """RELOAD v1.4.0 : Rafraîchit tout sans redémarrer le bot"""
         self.blacklist = [] 
         self.load_database()
+        self.load_viewers() # Synchronisation des fichiers de données
+        print(f"[SHIELD] Base de données et Viewers rechargés ({len(self.blacklist)} patterns).")
         return len(self.blacklist)
 
     def check_message(self, user, message, is_privileged=False):
+        """Analyse un message pour détecter le spam ou les bots publicitaires"""
         user = user.lower()
         if user not in self.viewers_data:
             self.viewers_data[user] = [1, 0, datetime.now().strftime("%Y-%m-%d")]
@@ -144,18 +149,18 @@ class ChatShield:
             tracker["count"] = 0
             return True, "SPAM_LVL1"
 
-        # --- 2. LOGIQUE DE SÉCURITÉ (WHITELIST & IMMUNITÉ ART) ---
+        # --- 2. LOGIQUE DE SÉCURITÉ ---
         is_botting = False
         is_safe_link = False
         
-        # A. Priorité Whitelist Liens
+        # A. Whitelist Liens
         if any(ext in msg_raw for ext in ["http", ".com", ".net", ".ru", "t.me", "youtu.be"]):
             for domain in self.safe_domains:
                 if domain.lower() in msg_raw:
                     is_safe_link = True
                     break
         
-        # B. Priorité Immunité Art
+        # B. Immunité Art
         is_art_talk = any(art in msg_raw for art in self.art_keywords)
         if is_art_talk and (score >= 2 or count > 5):
             is_botting = False 
@@ -164,10 +169,8 @@ class ChatShield:
             msg_clean = msg_raw.replace(" ", "").replace("-", "").replace("_", "").replace(".", "")
             for pattern in self.blacklist:
                 if not pattern.strip(): continue
-                
                 if len(pattern) < 4:
-                    if not re.search(rf'\b{re.escape(pattern)}\b', msg_raw):
-                        continue
+                    if not re.search(rf'\b{re.escape(pattern)}\b', msg_raw): continue
                 
                 p_ns = pattern.replace(" ", "")
                 if pattern in msg_raw or (len(p_ns) > 4 and p_ns in msg_clean):

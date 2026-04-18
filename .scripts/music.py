@@ -16,18 +16,19 @@ class MusicManager:
         self.user_queues = {}
         self.last_track_uri = None
         
+        # Contrôle du Worker
+        self.running = True
+        
         # Chemins vers les fichiers de données
         self.cache_file = ".data/music_cache.json"
         os.makedirs(".data", exist_ok=True)
 
     # --- OUTILS DE COMPARAISON ET NETTOYAGE ---
     def clean_string(self, text):
-        """Supprime espaces, majuscules et caractères spéciaux pour la comparaison."""
         if not text: return ""
         return re.sub(r'[^a-z0-9]', '', text.lower())
 
     def get_similarity(self, a, b):
-        """Calcule le score de ressemblance entre deux chaînes."""
         return SequenceMatcher(None, self.clean_string(a), self.clean_string(b)).ratio() * 100
 
     # --- GESTION DU CACHE JSON ---
@@ -39,7 +40,6 @@ class MusicManager:
         except: return []
 
     def save_to_cache(self, title, artist, track_uri):
-        """Ajoute une musique à la mémoire si elle n'y est pas."""
         cache = self.load_cache()
         if any(item['uri'] == track_uri for item in cache): return
         
@@ -48,7 +48,6 @@ class MusicManager:
             json.dump(cache, f, indent=4, ensure_ascii=False)
 
     def find_in_cache(self, query):
-        """Recherche intelligente dans le cache avec priorité à l'original."""
         cache = self.load_cache()
         best_match = None
         highest_score = 0
@@ -56,32 +55,34 @@ class MusicManager:
 
         for entry in cache:
             t, a = entry['title'], entry['artist']
-            # On teste : Titre+Artiste, Artiste+Titre, et Titre seul
             tests = [f"{t}{a}", f"{a}{t}", t]
-            
             for test_str in tests:
                 score = self.get_similarity(query, test_str)
                 if score > highest_score:
                     highest_score = score
                     best_match = entry
                 elif score == highest_score and highest_score >= 76:
-                    # Option 1 : Si score égal, on préfère celle qui n'a pas de mots "Live/Remix"
                     current_has_alt = any(k in entry['title'].lower() for k in alt_keywords)
                     best_has_alt = any(k in best_match['title'].lower() for k in alt_keywords)
                     if best_has_alt and not current_has_alt:
                         best_match = entry
-                        
         return best_match if highest_score >= 76 else None
 
-    # --- ROUTINES DE FOND ---
+    # --- ROUTINES DE FOND (WORKER) ---
     def start_worker(self):
-        """Lance la surveillance et l'apprentissage automatique."""
+        """Lance la surveillance en arrière-plan."""
+        self.running = True
         threading.Thread(target=self._main_loop, daemon=True).start()
-        print("🎶 MusicManager (Auto-Learn & Rotation) prêt.")
+        print("🎶 MusicManager Worker démarré.")
+
+    def stop_worker(self):
+        """Arrête proprement le thread (appelé lors du reload)."""
+        self.running = False
+        print("🛑 MusicManager Worker stoppé.")
 
     def _main_loop(self):
-        """Surveille Spotify pour apprendre les musiques et vider les slots."""
-        while True:
+        """Boucle de surveillance (Rotation + Apprentissage)."""
+        while self.running:
             try:
                 curr = self.sp.current_playback()
                 if curr and curr['is_playing'] and curr['item']:
@@ -99,30 +100,29 @@ class MusicManager:
                                 self.user_queues[u].remove(uri)
                                 break
                 
-                # 3. Check de la rotation (déversement si >= 95)
+                # 3. Check de la rotation
                 self._check_playlist_rotation()
                 
-            except: pass
+            except Exception as e:
+                # Si erreur API (ex: Spotify fermé), on attend plus longtemps
+                time.sleep(10)
+            
+            # Attente entre deux vérifications
             time.sleep(20)
 
     def _check_playlist_rotation(self):
-        """Transfère la Live vers l'Archive si elle atteint 95 titres."""
         try:
             live_tracks = self.sp.playlist_items(self.playlist_id)['items']
             if len(live_tracks) >= 95:
-                live_uris = [t['track']['uri'] for t in live_tracks if t['track']]
-                
-                # Récupérer l'Archive pour éviter les doublons
+                live_uris = [t['track']['uri'] for t in live_tracks if t.get('track')]
                 arch_tracks = self.sp.playlist_items(self.archive_id)['items']
-                arch_uris = set(t['track']['uri'] for t in arch_tracks if t['track'])
+                arch_uris = set(t['track']['uri'] for t in arch_tracks if t.get('track'))
                 
                 to_archive = [u for u in live_uris if u not in arch_uris]
-                
                 if to_archive:
                     for i in range(0, len(to_archive), 100):
                         self.sp.playlist_add_items(self.archive_id, to_archive[i:i+100])
                 
-                # Vider la Live proprement
                 self.sp.playlist_replace_items(self.playlist_id, [])
         except: pass
 
@@ -131,50 +131,49 @@ class MusicManager:
         if l_msg.startswith('!sr '):
             self.handle_sr(user, message[4:].strip(), tags, callback)
             return True
-            
         elif l_msg == '!song':
-            curr = self.sp.current_playback()
-            if curr and curr['item']:
-                callback(f"🎶 {curr['item']['name']} - {curr['item']['artists'][0]['name']}")
+            try:
+                curr = self.sp.current_playback()
+                if curr and curr['item']:
+                    callback(f"🎶 {curr['item']['name']} - {curr['item']['artists'][0]['name']}")
+                else:
+                    callback("🔇 Aucune musique en cours.")
+            except: pass
             return True
-            
         elif l_msg == '!playlist':
+            # Utilisation de liens simplifiés pour le shield
             link_live = f"https://open.spotify.com/playlist/{self.playlist_id}"
             link_archive = f"https://open.spotify.com/playlist/{self.archive_id}"
-            callback(f"🔗 Playlist du mois : {link_live}")
-            callback(f"🔗 Playlist totale : {link_archive}")
+            callback(f"🔗 Live : {link_live}")
+            callback(f"🔗 Archive : {link_archive}")
             return True
-            
         elif l_msg.startswith('!wrongsong'):
             self.handle_wrongsong(user, message[10:].strip(), tags, callback)
             return True
-
-        elif l_msg == '!skipsong' and is_privileged:
+        elif (l_msg == '!skip' or l_msg == '!skipsong') and is_privileged:
             try:
                 self.sp.next_track()
                 callback("⏭️ Skip effectué.")
-            except Exception as e:
-                callback("❌ Erreur lors du skip (Lecteur inactif ?).")
+            except:
+                callback("❌ Impossible de skip (Lecteur inactif ?).")
             return True 
-
         return False
 
     def handle_sr(self, user, query, tags, send_msg_func):
         try:
             u_low = user.lower()
             badges = tags.get('badges', "")
-            
             if u_low not in self.user_queues: self.user_queues[u_low] = []
             
-            # 1. Vérification des limites
+            # Limites
             if not ('broadcaster' in badges):
                 max_allowed = self.limit_modo if ('moderator' in badges or u_low in self.admins) else self.limit_user
                 if len(self.user_queues[u_low]) >= max_allowed:
                     return send_msg_func(f"@{user}, limite de {max_allowed} titres atteinte.")
 
-            # 2. Recherche (URL -> Cache -> Spotify)
+            # Recherche
             track_info = None
-            if "spotify:track:" in query or "http" in query:
+            if "spotify.com" in query or "spotify:track:" in query:
                 match = re.search(r'track[/:]([a-zA-Z0-9]{22})', query)
                 if match: 
                     t_data = self.sp.track(match.group(1))
@@ -192,20 +191,18 @@ class MusicManager:
             if not track_info:
                 return send_msg_func(f"❌ Impossible de trouver '{query}'.")
 
-            # 3. Anti-doublons (Playlist Live)
+            # Anti-doublons
             live_content = self.sp.playlist_items(self.playlist_id)['items']
-            # On ajoute une vérification 'if t.get('track')' pour éviter l'erreur
             if any(t.get('track') and track_info['uri'] == t['track']['uri'] for t in live_content):
                 return send_msg_func(f"@{user}, ce titre est déjà dans la file d'attente !")
 
-            # 4. Ajout Spotify
+            # Ajout
             self.sp.playlist_add_items(self.playlist_id, [track_info['uri']])
             try: self.sp.add_to_queue(track_info['uri'])
             except: pass
             
-            # 5. Confirmation
             self.user_queues[u_low].append(track_info['uri'])
-            send_msg_func(f"✅ Ajouté à la file d'attente : {track_info['name']} - {track_info['artist']}")
+            send_msg_func(f"✅ Ajouté : {track_info['name']} - {track_info['artist']}")
 
         except Exception as e:
             print(f"❌ Erreur handle_sr: {e}")
@@ -223,8 +220,7 @@ class MusicManager:
                     self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, [t['uri']])
                     for q in self.user_queues.values():
                         if t['uri'] in q: q.remove(t['uri'])
-                    send_msg_func(f"🗑️ [Admin] {t['name']} retiré de la playlist.")
-                else: send_msg_func(f"❌ Aucun titre trouvé pour '{query}'.")
+                    send_msg_func(f"🗑️ [Admin] {t['name']} retiré.")
                 return
 
             if u_low in self.user_queues and self.user_queues[u_low]:
@@ -234,4 +230,4 @@ class MusicManager:
             else:
                 send_msg_func(f"@{user}, tu n'as pas de titre en file d'attente.")
         except Exception as e:
-            print(f"❌ Erreur MusicManager (!wrongsong): {e}")
+            print(f"❌ Erreur !wrongsong: {e}")
