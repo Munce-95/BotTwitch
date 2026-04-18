@@ -194,7 +194,8 @@ class MusicManager:
 
             # 3. Anti-doublons (Playlist Live)
             live_content = self.sp.playlist_items(self.playlist_id)['items']
-            if any(track_info['uri'] == t['track']['uri'] for t in live_content if t['track']):
+            # On ajoute une vérification 'if t.get('track')' pour éviter l'erreur
+            if any(t.get('track') and track_info['uri'] == t['track']['uri'] for t in live_content):
                 return send_msg_func(f"@{user}, ce titre est déjà dans la file d'attente !")
 
             # 4. Ajout Spotify
