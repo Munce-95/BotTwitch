@@ -28,14 +28,14 @@ Le bot gère automatiquement la confiance accordée aux viewers pour éviter les
 ## 🎵 Commandes du Chat
 
 ### Pour les Viewers
-- !sr <nom ou lien> : Cherche et ajoute une musique à la playlist.
+- !sr "nom ou lien" : Cherche et ajoute une musique à la playlist.
 - !wrongsong : Supprime la dernière chanson que tu as ajoutée.
 - !song : Affiche le titre et l'artiste de la musique actuelle.
 - !playlist : Envoie le lien Spotify de la playlist du stream.
 
 ### Pour les Modérateurs & Admins
 - !skipsong : Passe instantanément à la musique suivante sur Spotify.
-- !wrongsong <titre> : Supprime une musique spécifique de la playlist par son nom.
+- !wrongsong "titre" : Supprime une musique spécifique de la playlist par son nom.
 - !shield reload : Recharge la blacklist (ad_bot_suspicion.txt) sans redémarrer le bot.
 
 ## ⚙️ Configuration (Fichier main.py)
