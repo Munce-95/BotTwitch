@@ -51,7 +51,7 @@ Le bot gère automatiquement la confiance accordée aux viewers pour éviter les
 
 - **SPOTIFY_CLIENT_ID / SECRET** : Tes identifiants Spotify Developer.
 - **PLAYLIST_ID** : L'ID de 22 caractères de ta playlist Spotify.
-- **TWITCH_TOKEN** : Ton token OAuth Twitch (commençant par oauth:).
+- **TWITCH_TOKEN** : Ton token OAuth Twitch (commençant par oauth obtenu sur TwitchApp TMI).
 - **ADMINS** : Liste des pseudos (en minuscules) autorisés à modérer.
 
 ## 🛠️ Dépannage
