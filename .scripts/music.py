@@ -144,8 +144,8 @@ class MusicManager:
             # Utilisation de liens simplifiés pour le shield
             link_live = f"https://open.spotify.com/playlist/{self.playlist_id}"
             link_archive = f"https://open.spotify.com/playlist/{self.archive_id}"
-            callback(f"🔗 Live : {link_live}")
-            callback(f"🔗 Archive : {link_archive}")
+            callback(f"🔗 Playlist du mois : {link_live}")
+            callback(f"🔗 Playlist globale : {link_archive}")
             return True
         elif l_msg.startswith('!wrongsong'):
             self.handle_wrongsong(user, message[10:].strip(), tags, callback)
