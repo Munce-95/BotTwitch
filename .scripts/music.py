@@ -63,11 +63,11 @@ class MusicManager:
                     best_match = entry
         return best_match if highest_score >= 76 else None
 
-    # --- WORKER (BOUCLE DE FOND) ---
+    # --- WORKER (BOUCLE DE SURVEILLANCE) ---
     def start_worker(self):
         self.running = True
         threading.Thread(target=self._main_loop, daemon=True).start()
-        print("🎶 MusicManager v1.4.1.1 démarré.")
+        print("🎶 MusicManager v1.4.2 démarré (Mode Hybride).")
 
     def stop_worker(self):
         self.running = False
@@ -83,24 +83,21 @@ class MusicManager:
                     track = curr['item']
                     uri = track['uri']
                     
-                    # LOGIQUE SMART : On n'agit que si le titre a changé
                     if uri != self.last_track_uri:
                         self.last_track_uri = uri
                         self.current_track_name = track['name']
                         self.current_track_artist = track['artists'][0]['name']
                         
-                        # 1. Apprentissage unique par chanson
+                        # Apprentissage et nettoyage automatique
                         self.save_to_cache(self.current_track_name, self.current_track_artist, uri)
-
-                        # 2. Nettoyage automatique des slots
                         for u in list(self.user_queues.keys()):
                             if uri in self.user_queues[u]:
                                 self.user_queues[u].remove(uri)
                                 break
                 
-                # 3. Rotation intelligente (tous les 20 cycles)
+                # Rotation (tous les 30 cycles soit ~15 min)
                 rotation_counter += 1
-                if rotation_counter >= 20:
+                if rotation_counter >= 30:
                     self._check_playlist_rotation()
                     rotation_counter = 0
 
@@ -114,7 +111,7 @@ class MusicManager:
             except:
                 time.sleep(30)
             
-            time.sleep(40)
+            time.sleep(30) # Sommeil de sécurité pour l'AFK
 
     def _check_playlist_rotation(self):
         try:
@@ -135,23 +132,37 @@ class MusicManager:
         if l_msg.startswith('!sr '):
             self.handle_sr(user, message[4:].strip(), tags, callback)
             return True
+            
         elif l_msg == '!song':
-            # Utilise l'info déjà stockée par le worker (pas d'appel API supplémentaire)
-            if self.last_track_uri:
+            try:
+                # Rafraîchissement direct pour plus de précision
+                curr = self.sp.current_playback()
+                if curr and curr['item']:
+                    t = curr['item']
+                    callback(f"🎶 {t['name']} - {t['artists'][0]['name']}")
+                    # On met à jour la mémoire du bot immédiatement
+                    self.current_track_name = t['name']
+                    self.current_track_artist = t['artists'][0]['name']
+                    self.last_track_uri = t['uri']
+                else:
+                    callback("🔇 Aucune musique en cours.")
+            except:
+                # Backup sur la mémoire si Spotify sature
                 callback(f"🎶 {self.current_track_name} - {self.current_track_artist}")
-            else:
-                callback("🔇 Aucune musique détectée pour le moment.")
             return True
+            
         elif l_msg == '!playlist':
             link_live = f"https://open.spotify.com/playlist/{self.playlist_id}"
             link_archive = f"https://open.spotify.com/playlist/{self.archive_id}"
             callback(f"🔗 Playlist du mois : {link_live}")
             callback(f"🔗 Playlist globale : {link_archive}")
             return True
+            
         elif l_msg.startswith('!wrongsong'):
             self.handle_wrongsong(user, message[10:].strip(), tags, callback)
             return True
-        elif (l_msg == '!skip' or l_msg == '!skipsong') and is_privileged:
+            
+        elif (l_msg == '!skipsong') and is_privileged:
             try:
                 self.sp.next_track()
                 callback("⏭️ Skip effectué.")
@@ -172,7 +183,7 @@ class MusicManager:
                     return send_msg_func(f"@{user}, limite de {max_allowed} titres atteinte.")
 
             track_info = None
-            if "spotify.com" in query or "spotify:track:" in query:
+            if "track" in query:
                 match = re.search(r'track[/:]([a-zA-Z0-9]{22})', query)
                 if match: 
                     t_data = self.sp.track(match.group(1))

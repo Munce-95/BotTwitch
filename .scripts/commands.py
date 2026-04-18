@@ -8,7 +8,7 @@ def handle_command(bot, user, message, l_msg, tags, is_privileged):
 
     # --- 1. COMMANDES MUSIQUE (Délégation au MusicManager) ---
     # Ces commandes restent accessibles selon les limites définies dans MusicManager
-    music_cmds = ['!sr', '!song', '!skip', '!wrongsong', '!playlist']
+    music_cmds = ['!sr', '!song', '!skipsong', '!wrongsong', '!playlist']
     if any(l_msg.startswith(cmd) for cmd in music_cmds):
         print(f"[{ts}] 🎵 MUSIC : {user} -> {message}")
         bot.music.process_command(user, message, l_msg, tags, is_privileged, bot.send_msg)
@@ -23,7 +23,7 @@ def handle_command(bot, user, message, l_msg, tags, is_privileged):
         return True
     
     if l_msg == '!version':
-        bot.send_msg(f"@{user} > Bot Version v1.4.1 | Architecture : Modulaire")
+        bot.send_msg(f"@{user} > Bot Version v1.4.2 | Architecture : Modulaire")
         return True
     
 	# Commande !setlevel @user niveau

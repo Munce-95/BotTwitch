@@ -72,7 +72,7 @@ class TwitchBot(TwitchBase):
         if not self.connect(): return
         
         self.music.start_worker()
-        print(f"🚀 Bot v1.4.1 en ligne | Channel: {TWITCH_CHANNEL}")
+        print(f"🚀 Bot v1.4.2 en ligne | Channel: {TWITCH_CHANNEL}")
 
         while True:
             try:
