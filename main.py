@@ -17,7 +17,7 @@ SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 PLAYLIST_ID = os.getenv("PLAYLIST_ID")
 ARCHIVE_ID = os.getenv("ARCHIVE_ID")
-SPOTIFY_REDIRECT_URI = "http://localhost:8888/callback"
+SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8888/callback"
 SCOPE = "playlist-modify-public playlist-modify-private user-read-currently-playing user-modify-playback-state user-read-playback-state"
 
 # Paramètres du bot
