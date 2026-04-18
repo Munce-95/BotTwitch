@@ -6,40 +6,48 @@ setlocal enabledelayedexpansion
 :: 1. VERIFICATION DU FICHIER .ENV
 :: ===========================================================
 :check_env
-if not exist .env (
-    cls
-    echo ===========================================================
-    echo             PREMIERE INSTALLATION DETECTEE
-    echo ===========================================================
-    echo.
-    echo  [!] Le fichier de configuration .env est manquant.
-    echo.
-    echo  1. Remplissez les identifiants dans le fichier .env
-    echo  2. Utilisez le modele .env.example pour vous guider
-    echo  3. Enregistrez et revenez ici
-    echo.
-    echo ===========================================================
-    echo.
-    
-    if exist .env.example (
-        echo [SYSTEM] .env.example trouve. Voulez-vous le copier en .env ? (O/N)
-        set /p choice=^> 
-        if /i "!choice!"=="O" (
-            copy .env.example .env
-            echo [OK] Fichier .env cree. Allez le remplir maintenant.
-        )
-    ) else (
-        echo [!] .env.example introuvable. Veuillez creer votre .env manuellement.
-    )
+cls
+echo [DEBUG] Verification des fichiers...
 
-    echo.
-    echo [!] Appuyez sur une touche UNE FOIS que le .env est rempli et enregistre.
-    pause > nul
-    goto check_env
+:: On teste directement l'existence sans se soucier des attributs
+if exist ".env" (
+    echo [OK] .env trouve.
+    goto env_ok
 )
 
-echo [OK] Fichier .env detecte.
+:: Si on est ici, le .env n'existe pas. On cherche l'exemple.
+echo ===========================================================
+echo             PREMIERE INSTALLATION DETECTEE
+echo ===========================================================
+echo.
 
+if exist ".env.example" (
+    echo [SYSTEM] .env.example detecte.
+    echo [ACTION] Copie en cours...
+    copy /y ".env.example" ".env" >nul
+    echo.
+    echo [!] Le fichier .env a ete cree a partir du modele.
+    echo [!] REMPLISSEZ-LE MAINTENANT, enregistrez, puis revenez ici.
+) else (
+    echo [!] ERREUR : .env.example est introuvable dans :
+    echo     %cd%
+    echo.
+    echo [ACTION] Creation d'un fichier .env vide pour vous aider...
+    echo # Identifiants Twitch > .env
+    echo TWITCH_TOKEN=oauth: >> .env
+    echo TWITCH_NICK= >> .env
+    echo.
+    echo [!] Un fichier .env vierge a ete cree. Allez le remplir.
+)
+
+echo.
+echo ===========================================================
+echo [ATTENTE] Appuyez sur une touche UNE FOIS le .env rempli...
+pause > nul
+goto check_env
+
+:env_ok
+echo [SYSTEM] Configuration prete.
 :: ===========================================================
 :: 2. CREATION ET ACTIVATION DU VENV
 :: ===========================================================
