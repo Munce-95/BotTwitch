@@ -6,7 +6,7 @@ Ce bot permet aux viewers de demander des musiques Spotify via le chat Twitch to
 
 1. **Python** : Installe Python 3.10+ (Coche bien la case "Add Python to PATH" sur Windows).
 2. **Dépendances** :
-   - Windows : Double-clique sur start_bot.bat.
+   - Windows : Double-clique sur start_bot_win.bat.
    - Linux/Mac : Lance ./start_bot_linux.sh dans un terminal.
 3. **Configuration** :
    - Au premier lancement, le script créera un fichier .env.
