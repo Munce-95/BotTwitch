@@ -105,9 +105,21 @@ class ChatShield:
         """RELOAD v1.4.0 : Rafraîchit tout sans redémarrer le bot"""
         self.blacklist = [] 
         self.load_database()
-        self.load_viewers() # Synchronisation des fichiers de données
+        self.load_viewers() 
         print(f"[SHIELD] Base de données et Viewers rechargés ({len(self.blacklist)} patterns).")
         return len(self.blacklist)
+
+    def unban_grace(self, user):
+        """v1.4.1 : Remet un utilisateur banni au score 0 (Haute surveillance)"""
+        user = user.lower()
+        # On crée l'entrée si elle n'existe pas, sinon on modifie
+        if user not in self.viewers_data:
+            self.viewers_data[user] = [0, 0, datetime.now().strftime("%Y-%m-%d")]
+        else:
+            self.viewers_data[user][0] = 0
+            self.viewers_data[user][1] = 0
+        self.save_data()
+        return True
 
     def check_message(self, user, message, is_privileged=False):
         """Analyse un message pour détecter le spam ou les bots publicitaires"""
@@ -153,19 +165,16 @@ class ChatShield:
         is_botting = False
         is_safe_link = False
         
-        # A. Whitelist Liens
         if any(ext in msg_raw for ext in ["http", ".com", ".net", ".ru", "t.me", "youtu.be"]):
             for domain in self.safe_domains:
                 if domain.lower() in msg_raw:
                     is_safe_link = True
                     break
         
-        # B. Immunité Art
         is_art_talk = any(art in msg_raw for art in self.art_keywords)
         if is_art_talk and (score >= 2 or count > 5):
             is_botting = False 
         elif not is_safe_link:
-            # C. Check Blacklist
             msg_clean = msg_raw.replace(" ", "").replace("-", "").replace("_", "").replace(".", "")
             for pattern in self.blacklist:
                 if not pattern.strip(): continue
@@ -179,7 +188,6 @@ class ChatShield:
                     is_botting = True
                     break
         
-        # D. Liens inconnus pour les bas scores
         if not is_botting and not is_safe_link and score <= 1:
             if any(ext in msg_raw for ext in ["http", ".com", ".net", ".ru", "t.me", "youtu.be"]):
                 is_botting = True

@@ -23,7 +23,21 @@ def handle_command(bot, user, message, l_msg, tags, is_privileged):
         return True
     
     if l_msg == '!version':
-        bot.send_msg(f"@{user} > Bot Version v1.4.0 | Architecture : Modulaire")
+        bot.send_msg(f"@{user} > Bot Version v1.4.1 | Architecture : Modulaire")
+        return True
+    
+	# Commande !setlevel @user niveau
+    if l_msg.startswith('!setlevel '):
+        parts = message.split(' ')
+        if len(parts) == 3:
+            target = parts[1].replace('@', '').lower()
+            try:
+                new_lvl = int(parts[2])
+                # On appelle update_user du shield via l'objet bot
+                bot.shield.update_user(target, new_score=new_lvl)
+                bot.send_msg(f"⚙️ [Shield] Le niveau de @{target} est maintenant {new_lvl}.")
+            except ValueError:
+                bot.send_msg(f"❌ Erreur : Le niveau doit être un chiffre (ex: !setlevel @pseudo 2).")
         return True
 
     # Si aucune commande n'est reconnue

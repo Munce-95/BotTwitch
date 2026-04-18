@@ -24,7 +24,7 @@ LIMIT_MODO = int(os.getenv("LIMIT_MODO", 10))
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.scripts'))
 
-# Imports des modules (on importe les fichiers pour pouvoir utiliser importlib.reload)
+# Imports des modules
 try:
     from bot_core import TwitchBase # type: ignore
     import shield  # type: ignore
@@ -62,7 +62,6 @@ class TwitchBot(TwitchBase):
         importlib.reload(music)
         importlib.reload(commands)
         
-        # On arrête proprement l'ancien worker musique avant d'en créer un nouveau
         if hasattr(self, 'music'): self.music.stop_worker()
         
         self.init_modules()
@@ -73,17 +72,29 @@ class TwitchBot(TwitchBase):
         if not self.connect(): return
         
         self.music.start_worker()
-        print(f"🚀 Bot v1.4.0 en ligne | Channel: {TWITCH_CHANNEL}")
+        print(f"🚀 Bot v1.4.1 en ligne | Channel: {TWITCH_CHANNEL}")
 
         while True:
             try:
                 resp = self.sock.recv(4096).decode('utf-8', 'ignore')
                 if not resp: break
                 
+                # --- GESTION DU PING ---
                 if resp.startswith('PING'):
                     self.sock.send("PONG :tmi.twitch.tv\r\n".encode('utf-8'))
                     continue
 
+                # --- 1. DETECTION DU /UNBAN (Message Système NOTICE) --- v1.4.1
+                if "NOTICE" in resp and "unbanned" in resp.lower():
+                    try:
+                        parts = resp.strip().split(" ")
+                        target = parts[-1].replace(".", "").lower()
+                        self.shield.unban_grace(target)
+                        print(f"[{self.get_timestamp()}] 🛡️ SHIELD : Grâce accordée via /unban -> {target}")
+                    except: pass
+                    continue
+
+                # --- 2. GESTION DES MESSAGES (PRIVMSG) ---
                 if "PRIVMSG" in resp:
                     user, message, tags = self.parse_irc(resp)
                     if user == TWITCH_NICK.lower(): continue
@@ -92,7 +103,7 @@ class TwitchBot(TwitchBase):
                     is_privileged = any(x in tags.get('badges', '') for x in ['broadcaster', 'moderator', 'vip']) or user in ADMINS
                     ts = self.get_timestamp()
 
-                    # --- 1. SÉCURITÉ (Shield) ---
+                    # --- A. SÉCURITÉ (Shield) ---
                     is_bad, action = self.shield.check_message(user, message, is_privileged)
                     if is_bad:
                         if action == "ACTION_BAN_PERMANENT":
@@ -106,7 +117,7 @@ class TwitchBot(TwitchBase):
                             if "SPAM" in action: self.send_msg(f"Attention au spam @{user}")
                         continue 
 
-                    # --- 2. GESTION DU RELOAD (v1.4.0) ---
+                    # --- B. RELOAD (v1.4.0) ---
                     if l_msg.startswith('!reload') and is_privileged:
                         parts = l_msg.split()
                         target = parts[1] if len(parts) > 1 else "all"
@@ -114,32 +125,28 @@ class TwitchBot(TwitchBase):
                         if target == "shield":
                             importlib.reload(shield)
                             self.shield = shield.ChatShield(db_path=".data/ad_bot_suspicion.txt", viewers_path=".data/viewer.txt")
-                            self.send_msg("🛡️ Module Shield (Code + Data) rechargé !")
-                        
+                            self.send_msg("🛡️ Module Shield rechargé !")
                         elif target == "music":
                             self.music.stop_worker()
                             importlib.reload(music)
                             self.music = music.MusicManager(sp, PLAYLIST_ID, ARCHIVE_ID, ADMINS, LIMIT_USER, LIMIT_MODO)
                             self.music.start_worker()
-                            self.send_msg("🎵 Module Musique (Code + Cache) rechargé !")
-
+                            self.send_msg("🎵 Module Musique rechargé !")
                         elif target == "commands":
                             importlib.reload(commands)
                             self.send_msg("⌨️ Module Commandes rechargé !")
-
                         elif target == "all":
                             msg = self.reload_all()
                             self.send_msg(f"🔄 {msg}")
                         continue
 
-                    # --- 3. COMMANDES EXTERNALISÉES ---
+                    # --- C. COMMANDES EXTERNALISÉES (v1.4.1 inclut !setlevel) ---
                     if l_msg.startswith('!'):
-                        # On délègue tout au fichier commands.py
                         commands.handle_command(self, user, message, l_msg, tags, is_privileged)
 
             except Exception as e:
                 print(f"⚠️ Erreur loop : {e}")
-                time.sleep(5) # Évite de boucler à l'infini sur une erreur
+                time.sleep(5)
                 continue
 
 if __name__ == '__main__':
