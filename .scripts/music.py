@@ -3,6 +3,7 @@ import os
 import json
 import time
 import threading
+import spotipy # type: ignore
 from difflib import SequenceMatcher
 
 class MusicManager:
@@ -15,15 +16,14 @@ class MusicManager:
         self.limit_modo = limit_modo
         self.user_queues = {}
         self.last_track_uri = None
+        self.current_track_name = "Inconnu"
+        self.current_track_artist = "Inconnu"
         
-        # Contrôle du Worker
         self.running = True
-        
-        # Chemins vers les fichiers de données
         self.cache_file = ".data/music_cache.json"
         os.makedirs(".data", exist_ok=True)
 
-    # --- OUTILS DE COMPARAISON ET NETTOYAGE ---
+    # --- OUTILS ---
     def clean_string(self, text):
         if not text: return ""
         return re.sub(r'[^a-z0-9]', '', text.lower())
@@ -31,7 +31,7 @@ class MusicManager:
     def get_similarity(self, a, b):
         return SequenceMatcher(None, self.clean_string(a), self.clean_string(b)).ratio() * 100
 
-    # --- GESTION DU CACHE JSON ---
+    # --- CACHE ---
     def load_cache(self):
         if not os.path.exists(self.cache_file): return []
         try:
@@ -43,72 +43,78 @@ class MusicManager:
         cache = self.load_cache()
         if any(item['uri'] == track_uri for item in cache): return
         
+        print(f"📖 Apprentissage : {title} - {artist}")
         cache.append({"title": title, "artist": artist, "uri": track_uri})
-        with open(self.cache_file, 'w', encoding='utf-8') as f:
-            json.dump(cache, f, indent=4, ensure_ascii=False)
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, indent=4, ensure_ascii=False)
+        except: pass
 
     def find_in_cache(self, query):
         cache = self.load_cache()
         best_match = None
         highest_score = 0
-        alt_keywords = ['live', 'remix', 'acoustic', 'edit', 'cover', 'version']
-
         for entry in cache:
             t, a = entry['title'], entry['artist']
-            tests = [f"{t}{a}", f"{a}{t}", t]
-            for test_str in tests:
+            for test_str in [f"{t}{a}", f"{a}{t}", t]:
                 score = self.get_similarity(query, test_str)
                 if score > highest_score:
                     highest_score = score
                     best_match = entry
-                elif score == highest_score and highest_score >= 76:
-                    current_has_alt = any(k in entry['title'].lower() for k in alt_keywords)
-                    best_has_alt = any(k in best_match['title'].lower() for k in alt_keywords)
-                    if best_has_alt and not current_has_alt:
-                        best_match = entry
         return best_match if highest_score >= 76 else None
 
-    # --- ROUTINES DE FOND (WORKER) ---
+    # --- WORKER (BOUCLE DE FOND) ---
     def start_worker(self):
-        """Lance la surveillance en arrière-plan."""
         self.running = True
         threading.Thread(target=self._main_loop, daemon=True).start()
-        print("🎶 MusicManager Worker démarré.")
+        print("🎶 MusicManager v1.4.1.1 démarré.")
 
     def stop_worker(self):
-        """Arrête proprement le thread (appelé lors du reload)."""
         self.running = False
         print("🛑 MusicManager Worker stoppé.")
 
     def _main_loop(self):
-        """Boucle de surveillance (Rotation + Apprentissage)."""
+        rotation_counter = 0
         while self.running:
             try:
                 curr = self.sp.current_playback()
+                
                 if curr and curr['is_playing'] and curr['item']:
                     track = curr['item']
                     uri = track['uri']
                     
-                    # 1. Apprentissage passif
-                    self.save_to_cache(track['name'], track['artists'][0]['name'], uri)
-
-                    # 2. Nettoyage des slots utilisateurs
+                    # LOGIQUE SMART : On n'agit que si le titre a changé
                     if uri != self.last_track_uri:
                         self.last_track_uri = uri
+                        self.current_track_name = track['name']
+                        self.current_track_artist = track['artists'][0]['name']
+                        
+                        # 1. Apprentissage unique par chanson
+                        self.save_to_cache(self.current_track_name, self.current_track_artist, uri)
+
+                        # 2. Nettoyage automatique des slots
                         for u in list(self.user_queues.keys()):
                             if uri in self.user_queues[u]:
                                 self.user_queues[u].remove(uri)
                                 break
                 
-                # 3. Check de la rotation
-                self._check_playlist_rotation()
-                
-            except Exception as e:
-                # Si erreur API (ex: Spotify fermé), on attend plus longtemps
-                time.sleep(10)
+                # 3. Rotation intelligente (tous les 20 cycles)
+                rotation_counter += 1
+                if rotation_counter >= 20:
+                    self._check_playlist_rotation()
+                    rotation_counter = 0
+
+            except spotipy.exceptions.SpotifyException as e:
+                if e.http_status == 429:
+                    wait = int(e.headers.get("Retry-After", 60))
+                    print(f"⚠️ [RATE LIMIT] Pause forcée : {wait}s.")
+                    time.sleep(wait)
+                else:
+                    time.sleep(30)
+            except:
+                time.sleep(30)
             
-            # Attente entre deux vérifications
-            time.sleep(20)
+            time.sleep(40)
 
     def _check_playlist_rotation(self):
         try:
@@ -117,31 +123,26 @@ class MusicManager:
                 live_uris = [t['track']['uri'] for t in live_tracks if t.get('track')]
                 arch_tracks = self.sp.playlist_items(self.archive_id)['items']
                 arch_uris = set(t['track']['uri'] for t in arch_tracks if t.get('track'))
-                
                 to_archive = [u for u in live_uris if u not in arch_uris]
                 if to_archive:
                     for i in range(0, len(to_archive), 100):
                         self.sp.playlist_add_items(self.archive_id, to_archive[i:i+100])
-                
                 self.sp.playlist_replace_items(self.playlist_id, [])
         except: pass
 
-    # --- TRAITEMENT DES COMMANDES ---
+    # --- COMMANDES ---
     def process_command(self, user, message, l_msg, tags, is_privileged, callback):
         if l_msg.startswith('!sr '):
             self.handle_sr(user, message[4:].strip(), tags, callback)
             return True
         elif l_msg == '!song':
-            try:
-                curr = self.sp.current_playback()
-                if curr and curr['item']:
-                    callback(f"🎶 {curr['item']['name']} - {curr['item']['artists'][0]['name']}")
-                else:
-                    callback("🔇 Aucune musique en cours.")
-            except: pass
+            # Utilise l'info déjà stockée par le worker (pas d'appel API supplémentaire)
+            if self.last_track_uri:
+                callback(f"🎶 {self.current_track_name} - {self.current_track_artist}")
+            else:
+                callback("🔇 Aucune musique détectée pour le moment.")
             return True
         elif l_msg == '!playlist':
-            # Utilisation de liens simplifiés pour le shield
             link_live = f"https://open.spotify.com/playlist/{self.playlist_id}"
             link_archive = f"https://open.spotify.com/playlist/{self.archive_id}"
             callback(f"🔗 Playlist du mois : {link_live}")
@@ -155,7 +156,7 @@ class MusicManager:
                 self.sp.next_track()
                 callback("⏭️ Skip effectué.")
             except:
-                callback("❌ Impossible de skip (Lecteur inactif ?).")
+                callback("❌ Impossible de skip.")
             return True 
         return False
 
@@ -165,13 +166,11 @@ class MusicManager:
             badges = tags.get('badges', "")
             if u_low not in self.user_queues: self.user_queues[u_low] = []
             
-            # Limites
             if not ('broadcaster' in badges):
                 max_allowed = self.limit_modo if ('moderator' in badges or u_low in self.admins) else self.limit_user
                 if len(self.user_queues[u_low]) >= max_allowed:
                     return send_msg_func(f"@{user}, limite de {max_allowed} titres atteinte.")
 
-            # Recherche
             track_info = None
             if "spotify.com" in query or "spotify:track:" in query:
                 match = re.search(r'track[/:]([a-zA-Z0-9]{22})', query)
@@ -191,12 +190,10 @@ class MusicManager:
             if not track_info:
                 return send_msg_func(f"❌ Impossible de trouver '{query}'.")
 
-            # Anti-doublons
             live_content = self.sp.playlist_items(self.playlist_id)['items']
             if any(t.get('track') and track_info['uri'] == t['track']['uri'] for t in live_content):
                 return send_msg_func(f"@{user}, ce titre est déjà dans la file d'attente !")
 
-            # Ajout
             self.sp.playlist_add_items(self.playlist_id, [track_info['uri']])
             try: self.sp.add_to_queue(track_info['uri'])
             except: pass
@@ -204,8 +201,10 @@ class MusicManager:
             self.user_queues[u_low].append(track_info['uri'])
             send_msg_func(f"✅ Ajouté : {track_info['name']} - {track_info['artist']}")
 
-        except Exception as e:
-            print(f"❌ Erreur handle_sr: {e}")
+        except spotipy.exceptions.SpotifyException as e:
+            if e.http_status == 429:
+                send_msg_func("⚠️ Spotify est fatigué, réessaie plus tard.")
+        except: pass
 
     def handle_wrongsong(self, user, query, tags, send_msg_func):
         try:
@@ -229,5 +228,4 @@ class MusicManager:
                 send_msg_func(f"🗑️ @{user}, ton dernier titre a été retiré.")
             else:
                 send_msg_func(f"@{user}, tu n'as pas de titre en file d'attente.")
-        except Exception as e:
-            print(f"❌ Erreur !wrongsong: {e}")
+        except: pass
