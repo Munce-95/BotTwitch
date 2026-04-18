@@ -1,8 +1,8 @@
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+import spotipy # type: ignore
+from spotipy.oauth2 import SpotifyOAuth # type: ignore
 import os, sys
 from datetime import datetime
-from dotenv import load_dotenv
+from dotenv import load_dotenv # type: ignore
 
 # --- CHARGEMENT DES CONFIGURATIONS (.env) ---
 load_dotenv()
@@ -16,6 +16,7 @@ TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 PLAYLIST_ID = os.getenv("PLAYLIST_ID")
+ARCHIVE_ID = os.getenv("ARCHIVE_ID")
 SPOTIFY_REDIRECT_URI = "http://localhost:8888/callback"
 SCOPE = "playlist-modify-public playlist-modify-private user-read-currently-playing user-modify-playback-state user-read-playback-state"
 
@@ -30,9 +31,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.scripts'))
 
 # 2. IMPORTS DES MODULES CUSTOM
 try:
-    from bot_core import TwitchBase
-    from shield import ChatShield
-    from music import MusicManager
+    from bot_core import TwitchBase # type: ignore
+    from shield import ChatShield # type: ignore
+    from music import MusicManager # type: ignore
 except ImportError as e:
     print(f"❌ Erreur d'importation : {e}")
     sys.exit(1)
@@ -46,14 +47,16 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     open_browser=True
 ))
 
+
 class TwitchBot(TwitchBase):
     def __init__(self):
-        # On ne passe plus 'config', TwitchBase utilise ses propres os.getenv ou les arguments
+        # TwitchBase utilise ses propres os.getenv ou les arguments
         super().__init__()
         
         # Initialisation du bouclier anti-bot et du gestionnaire de musique
         self.shield = ChatShield(db_path=".data/ad_bot_suspicion.txt", viewers_path=".data/viewer.txt")
-        self.music = MusicManager(sp, PLAYLIST_ID, ADMINS, LIMIT_USER, LIMIT_MODO)
+        self.music = MusicManager(sp, PLAYLIST_ID, ARCHIVE_ID, ADMINS, LIMIT_USER, LIMIT_MODO)
+        self.music.start_worker()
 
     def run(self):
         """Lancement du bot et de la boucle de réception IRC"""
