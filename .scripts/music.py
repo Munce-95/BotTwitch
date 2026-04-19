@@ -1,9 +1,10 @@
+# type: ignore
 import re
 import os
 import json
 import time
 import threading
-import spotipy # type: ignore
+import spotipy
 from difflib import SequenceMatcher
 
 class MusicManager:
