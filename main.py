@@ -1,8 +1,9 @@
-import spotipy # type: ignore
-from spotipy.oauth2 import SpotifyOAuth # type: ignore
+# type: ignore
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 import os, sys, time, importlib
 from datetime import datetime
-from dotenv import load_dotenv # type: ignore
+from dotenv import load_dotenv
 
 # --- CHARGEMENT DES CONFIGURATIONS ---
 load_dotenv()
@@ -26,10 +27,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.scripts'))
 
 # Imports des modules
 try:
-    from bot_core import TwitchBase # type: ignore
-    import shield  # type: ignore
-    import music # type: ignore
-    import commands # type: ignore
+    from bot_core import TwitchBase
+    import shield
+    import music
+    import commands 
 except ImportError as e:
     print(f"❌ Erreur d'importation : {e}")
     sys.exit(1)
@@ -57,22 +58,23 @@ class TwitchBot(TwitchBase):
         return datetime.now().strftime('%H:%M:%S')
 
     def reload_all(self):
-        """Action pour le !reload all"""
+        """Action pour le !reload all (v1.4.3)"""
+        if hasattr(self, 'music'):
+            self.music.running = False # Arrêt propre du thread
+        
         importlib.reload(shield)
         importlib.reload(music)
         importlib.reload(commands)
         
-        if hasattr(self, 'music'): self.music.stop_worker()
-        
         self.init_modules()
         self.music.start_worker()
-        return "Système complet (Shield, Music, Commands) rechargé !"
+        return "Système complet v1.4.3 rechargé !"
 
     def run(self):
         if not self.connect(): return
         
         self.music.start_worker()
-        print(f"🚀 Bot v1.4.2 en ligne | Channel: {TWITCH_CHANNEL}")
+        print(f"🚀 Bot v1.4.3 en ligne | Channel: {TWITCH_CHANNEL}")
 
         while True:
             try:
@@ -84,7 +86,7 @@ class TwitchBot(TwitchBase):
                     self.sock.send("PONG :tmi.twitch.tv\r\n".encode('utf-8'))
                     continue
 
-                # --- 1. DETECTION DU /UNBAN (Message Système NOTICE) --- v1.4.1
+                # --- 1. DETECTION DU /UNBAN ---
                 if "NOTICE" in resp and "unbanned" in resp.lower():
                     try:
                         parts = resp.strip().split(" ")
@@ -99,7 +101,8 @@ class TwitchBot(TwitchBase):
                     user, message, tags = self.parse_irc(resp)
                     if user == TWITCH_NICK.lower(): continue
                     
-                    l_msg = message.lower()
+                    l_msg = message.lower().strip()
+                    # Définition des privilèges
                     is_privileged = any(x in tags.get('badges', '') for x in ['broadcaster', 'moderator', 'vip']) or user in ADMINS
                     ts = self.get_timestamp()
 
@@ -117,7 +120,7 @@ class TwitchBot(TwitchBase):
                             if "SPAM" in action: self.send_msg(f"Attention au spam @{user}")
                         continue 
 
-                    # --- B. RELOAD (v1.4.0) ---
+                    # --- B. RELOAD (Seules commandes autorisées dans le Main) ---
                     if l_msg.startswith('!reload') and is_privileged:
                         parts = l_msg.split()
                         target = parts[1] if len(parts) > 1 else "all"
@@ -127,7 +130,7 @@ class TwitchBot(TwitchBase):
                             self.shield = shield.ChatShield(db_path=".data/ad_bot_suspicion.txt", viewers_path=".data/viewer.txt")
                             self.send_msg("🛡️ Module Shield rechargé !")
                         elif target == "music":
-                            self.music.stop_worker()
+                            self.music.running = False
                             importlib.reload(music)
                             self.music = music.MusicManager(sp, PLAYLIST_ID, ARCHIVE_ID, ADMINS, LIMIT_USER, LIMIT_MODO)
                             self.music.start_worker()
@@ -140,8 +143,9 @@ class TwitchBot(TwitchBase):
                             self.send_msg(f"🔄 {msg}")
                         continue
 
-                    # --- C. COMMANDES EXTERNALISÉES (v1.4.1 inclut !setlevel) ---
+                    # --- C. TOUTES LES AUTRES COMMANDES (Aiguillage v1.4.3) ---
                     if l_msg.startswith('!'):
+                        # On envoie TOUT à commands.py, qui dispatchera vers music ou admin
                         commands.handle_command(self, user, message, l_msg, tags, is_privileged)
 
             except Exception as e:
