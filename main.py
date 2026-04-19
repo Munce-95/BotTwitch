@@ -1,8 +1,9 @@
-import spotipy # type: ignore
-from spotipy.oauth2 import SpotifyOAuth # type: ignore
+# type: ignore
+import spotipy 
+from spotipy.oauth2 import SpotifyOAuth
 import os, sys, time, importlib
 from datetime import datetime
-from dotenv import load_dotenv # type: ignore
+from dotenv import load_dotenv
 
 # --- CHARGEMENT DES CONFIGURATIONS ---
 load_dotenv()
@@ -26,10 +27,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.scripts'))
 
 # Imports des modules
 try:
-    from bot_core import TwitchBase # type: ignore
-    import shield  # type: ignore
-    import music # type: ignore
-    import commands # type: ignore
+    from bot_core import TwitchBase
+    import shield
+    import music
+    import commands
 except ImportError as e:
     print(f"❌ Erreur d'importation : {e}")
     sys.exit(1)
