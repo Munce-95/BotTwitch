@@ -123,6 +123,7 @@ class MusicManager:
                     queue_data = self._load_queue()
                     if queue_data:
                         next_track = queue_data[0]
+                        # On injecte si la musique actuelle finit bientôt
                         if duration < 20000 or remaining < 10000:
                             if next_track['uri'] not in injected_uris:
                                 try:
@@ -224,11 +225,9 @@ class MusicManager:
 
             if not track_info: return send_msg_func(f"❌ Impossible de trouver '{query}'.")
 
-            # --- VERIFICATION DURÉE ---
             if track_info['duration'] > 600000:
                 return send_msg_func(f"⚠️ @{user}, la musique est trop longue (max 10:00).")
 
-            # --- VERIFICATION DOUBLONS (URI + SIMILARITÉ) ---
             current_queue = self._load_queue()
             if any(m['uri'] == track_info['uri'] for m in current_queue):
                 return send_msg_func(f"@{user}, ce titre est déjà dans la file !")
@@ -253,10 +252,7 @@ class MusicManager:
 
         except Exception as e:
             print(f"Erreur SR: {e}")
-            if "404" in str(e):
-                send_msg_func(f"⚠️ @{user}, lien invalide ou titre introuvable (404).")
-            else:
-                send_msg_func(f"⚠️ @{user}, erreur lors de la recherche.")
+            send_msg_func(f"⚠️ @{user}, erreur lors de la recherche.")
 
     def handle_skip(self, callback):
         try:
@@ -331,3 +327,5 @@ class MusicManager:
             self._save_queue(new_queue)
             self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, [uri_to_rev])
             send_msg_func(f"🗑️ @{user}, dernier titre retiré.")
+        else:
+            send_msg_func(f"@{user}, tu n'as pas de titre en file d'attente.")
