@@ -47,7 +47,7 @@ echo [SYSTEM] Configuration prete.
 echo [SYSTEM] Verification des mises a jour sur GitHub...
 :: On verifie si le dossier est bien un depot Git
 if exist ".git" (
-    :: On force le reset pour eviter les conflits si ton pote a modifie un fichier par erreur
+    :: On force le reset pour eviter les conflits si l'utilisateur a modifie un fichier par erreur
     git reset --hard origin/main >nul 2>&1
     git pull origin main
     if errorlevel 1 (
