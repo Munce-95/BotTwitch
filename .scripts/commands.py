@@ -2,17 +2,20 @@
 
 def handle_command(bot, user, message, l_msg, tags, is_privileged):
     """
-    Gestionnaire central des commandes (!)
+    Gestionnaire central des commandes (!) - v1.4.3
     """
     ts = bot.get_timestamp()
 
     # --- 1. COMMANDES MUSIQUE (Délégation au MusicManager) ---
-    # Ces commandes restent accessibles selon les limites définies dans MusicManager
-    music_cmds = ['!sr', '!song', '!skipsong', '!wrongsong', '!playlist']
-    if any(l_msg.startswith(cmd) for cmd in music_cmds):
+    # Ajout de !queue et !clearqueue dans la liste v1.4.3
+    music_cmds = ['!sr ', '!song', '!skipsong', '!wrongsong', '!playlist', '!queue', '!clearqueue']
+    
+    # On vérifie si le message commence par l'une des commandes musicales
+    if any(l_msg.startswith(cmd) for cmd in music_cmds) or l_msg == '!sr':
         print(f"[{ts}] 🎵 MUSIC : {user} -> {message}")
-        bot.music.process_command(user, message, l_msg, tags, is_privileged, bot.send_msg)
-        return True
+        # process_command renvoie True si la commande a été traitée
+        if bot.music.process_command(user, message, l_msg, tags, is_privileged, bot.send_msg):
+            return True
 
     # --- 2. COMMANDES SYSTÈME (Réservées Admins/Modos/VIP) ---
     if not is_privileged:
@@ -23,10 +26,10 @@ def handle_command(bot, user, message, l_msg, tags, is_privileged):
         return True
     
     if l_msg == '!version':
-        bot.send_msg(f"@{user} > Bot Version v1.4.2 | Architecture : Modulaire")
+        bot.send_msg(f"@{user} > Bot Version v1.4.3 | Smart Queue & Blacklist System")
         return True
     
-	# Commande !setlevel @user niveau
+    # Commande !setlevel @user niveau (Shield Management)
     if l_msg.startswith('!setlevel '):
         parts = message.split(' ')
         if len(parts) == 3:
