@@ -26,19 +26,23 @@ dist/
 # ==========================================
 # DONNÉES DU BOT (.data)
 # ==========================================
-# On ignore par défaut tout le contenu du dossier .data
-.data/**/*
 
-# --- EXCEPTIONS (On garde les fichiers nécessaires) ---
+# 1. On ignore tout le contenu de .data
+.data/*
 
-# Autoriser les fichiers modèles (.example) dans tous les sous-dossiers
+# 2. SAUF les sous-dossiers (on autorise Git à "entrer" dedans)
+!.data/database/
+!.data/config/
+!.data/security/
+
+# 3. À l'intérieur de ces dossiers, on ignore tout...
+.data/database/*
+.data/config/*
+.data/security/*
+
+# 4. ...SAUF nos fichiers modèles et fichiers spécifiques
 !.data/**/*.example
-
-# Autoriser spécifiquement le dictionnaire de suspicion des bots (Security)
 !.data/security/ad_bot_suspicion.txt
-
-# Optionnel : Conserver la structure des dossiers sur Git via des fichiers .gitkeep
-# (Utile si tu n'as pas encore mis les .example dans chaque dossier)
 !.data/**/.gitkeep
 
 # ==========================================

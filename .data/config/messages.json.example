@@ -1,0 +1,27 @@
+{
+  "HELP_INFO": {
+    "--- LEXIQUE DES BALISES ---": "Mots à utiliser pour que le bot les remplace par les vraies infos",
+    "{user}": "Pseudo du viewer",
+    "{title}": "Nom de la musique",
+    "{artist}": "Nom de l'artiste",
+    "{timer}": "Durée (ex: 3:45)",
+    "{pos}": "Position dans la file (uniquement !sr)",
+    "{list}": "Top 5 prochaines musiques (uniquement !queue)",
+    "{limit}": "Limite max de sons autorisés",
+    "{live_url}": "Lien playlist Live",
+    "{archive_url}": "Lien playlist Archive",
+    "--- CONSEIL ---": "Ne supprimez pas les guillemets ni les virgules en fin de ligne !"
+  },
+
+  "sr_msg": "✅ @{user}, ton titre a été ajouté : {title} - {artist} (Position {pos})",
+  "song_msg": "🎶 En cours : {title} - {artist} [{timer}]",
+  "song_none_msg": "📋 Aucune musique ne joue actuellement.",
+  "queue_msg": "📋 Prochainement : {list}",
+  "queue_empty_msg": "📋 La file d'attente est vide.",
+  "playlist_msg": "🎵 La playlist : {archive_url}",
+  "wrongsong_viewer_msg": "🗑️ @{user}, ton dernier ajout a été retiré.",
+  "wrongsong_admin_msg": "🚫 [Admin] {title} a été supprimé définitivement.",
+  "skip_msg": "⏭️ Skip ! Passage à : {title}",
+  "limit_msg": "⚠️ @{user}, tu as atteint ta limite de {limit} musiques.",
+  "blacklist_msg": "🚫 @{user}, ce titre est banni."
+}
