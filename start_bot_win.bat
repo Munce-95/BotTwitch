@@ -1,5 +1,5 @@
 @echo off
-title Bot Twitch
+title Bot Twitch - v1.4.4
 setlocal enabledelayedexpansion
 
 :: ===========================================================
@@ -15,7 +15,7 @@ if exist ".env" (
 )
 
 echo ===========================================================
-echo               PREMIERE INSTALLATION DETECTEE
+echo                PREMIERE INSTALLATION DETECTEE
 echo ===========================================================
 echo.
 
@@ -45,39 +45,38 @@ echo [SYSTEM] Configuration prete.
 :: 1b. MISE A JOUR AUTOMATIQUE (GIT PULL)
 :: ===========================================================
 echo [SYSTEM] Verification des mises a jour sur GitHub...
-:: On verifie si le dossier est bien un depot Git
 if exist ".git" (
-    :: On force le reset pour eviter les conflits si l'utilisateur a modifie un fichier par erreur
     git reset --hard origin/main >nul 2>&1
     git pull origin main
     if errorlevel 1 (
-        echo [!] Echec de la mise a jour automatique. On continue avec la version locale.
+        echo [!] Echec de la mise a jour automatique.
     ) else (
         echo [OK] Le bot est a jour.
     )
-) else (
-    echo [!] Git non detecte dans ce dossier, mise a jour auto ignoree.
 )
 
 :: ===========================================================
-:: 2. CREATION ET ACTIVATION DU VENV
+:: 2. CREATION DU VENV SI NECESSAIRE
 :: ===========================================================
 if not exist venv (
     echo [SYSTEM] Environnement virtuel non detecte. Creation...
-    py -m venv venv
-    if errorlevel 1 python -m venv venv
+    :: On essaie 'py' puis 'python' pour la creation initiale
+    py -m venv venv || python -m venv venv
+    if errorlevel 1 (
+        echo [!] ERREUR CRITIQUE : Python n'est pas installe sur ce systeme.
+        pause
+        exit
+    )
 )
 
-echo [SYSTEM] Activation de l'environnement virtuel...
-call venv\Scripts\activate
-
 :: ===========================================================
-:: 3. MISE A JOUR DES DEPENDANCES
+:: 3. MISE A JOUR DES DEPENDANCES (VIA CHEMIN DIRECT)
 :: ===========================================================
 echo [SYSTEM] Verification des dependances...
-python -m pip install --upgrade pip --quiet
+:: On utilise le chemin direct pour eviter l'erreur "python non reconnu"
+venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 if exist requirements.txt (
-    pip install -r requirements.txt --quiet
+    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 )
 
 :: ===========================================================
@@ -85,12 +84,14 @@ if exist requirements.txt (
 :: ===========================================================
 cls
 echo ===========================================================
-echo               BOT TWITCH EST EN LIGNE (v1.4.4)
+echo                BOT TWITCH EST EN LIGNE (v1.4.4)
 echo ===========================================================
 echo.
 
 :loop
-python main.py
+:: L'appel direct qui sauve la mise
+venv\Scripts\python.exe main.py
+
 echo.
 echo [!] Le bot s'est arrete (Crash ou Erreur).
 echo [!] Relancement automatique dans 5 secondes...
