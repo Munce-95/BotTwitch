@@ -18,7 +18,6 @@ dist/
 # ==========================================
 # SECRETS ET CONFIGURATION (Crucial !)
 # ==========================================
-# On ignore tes accès personnels et le cache Spotify
 .env
 .envrc
 .cache
@@ -27,16 +26,20 @@ dist/
 # ==========================================
 # DONNÉES DU BOT (.data)
 # ==========================================
-# On ignore les données privées des viewers
-.data/viewer.txt
-.data/music_cache.json
-.data/banwords.txt
-.data/whitelist.txt
-.data/queue.json
+# On ignore par défaut tout le contenu du dossier .data
+.data/**/*
 
-# Optionnel : Si tu veux que ton ami ait un dossier .data vide sur GitHub
-# mais sans tes fichiers de logs/viewers, tu peux décommenter la ligne suivante :
-# .data/*.log
+# --- EXCEPTIONS (On garde les fichiers nécessaires) ---
+
+# Autoriser les fichiers modèles (.example) dans tous les sous-dossiers
+!.data/**/*.example
+
+# Autoriser spécifiquement le dictionnaire de suspicion des bots (Security)
+!.data/security/ad_bot_suspicion.txt
+
+# Optionnel : Conserver la structure des dossiers sur Git via des fichiers .gitkeep
+# (Utile si tu n'as pas encore mis les .example dans chaque dossier)
+!.data/**/.gitkeep
 
 # ==========================================
 # OUTILS ET ÉDITEURS (VS Code, Cursor, etc.)

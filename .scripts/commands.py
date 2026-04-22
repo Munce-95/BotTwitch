@@ -1,47 +1,52 @@
+# type: ignore
 # commands.py
 
 def handle_command(bot, user, message, l_msg, tags, is_privileged):
     """
-    Gestionnaire central des commandes (!) - v1.4.3
+    Gestionnaire central des commandes (!) - v1.4.4 | Maitrise des données
     """
     ts = bot.get_timestamp()
 
     # --- 1. COMMANDES MUSIQUE (Délégation au MusicManager) ---
-    # Ajout de !queue et !clearqueue dans la liste v1.4.3
-    music_cmds = ['!sr ', '!song', '!skipsong', '!wrongsong', '!playlist', '!queue', '!clearqueue']
+    music_cmds = ['!sr', '!song', '!skipsong', '!wrongsong', '!playlist', '!queue', '!clearqueue']
     
-    # On vérifie si le message commence par l'une des commandes musicales
-    if any(l_msg.startswith(cmd) for cmd in music_cmds) or l_msg == '!sr':
-        print(f"[{ts}] 🎵 MUSIC : {user} -> {message}")
-        # process_command renvoie True si la commande a été traitée
+    if any(l_msg.startswith(cmd) for cmd in music_cmds):
         if bot.music.process_command(user, message, l_msg, tags, is_privileged, bot.send_msg):
             return True
 
-    # --- 2. COMMANDES SYSTÈME (Réservées Admins/Modos/VIP) ---
+    # --- 2. COMMANDES SYSTÈME (Admins/Modos/VIP) ---
     if not is_privileged:
-        return False # On ignore la suite si l'utilisateur n'a pas les droits
+        return False 
 
+    # !ping
     if l_msg == '!ping':
         bot.send_msg(f"Pong! 🏓")
         return True
     
+    # !version
     if l_msg == '!version':
-        bot.send_msg(f"@{user} > Bot Version v1.4.3 | Smart Queue & Blacklist System")
+        bot.send_msg(f"@{user} > Bot Version v1.4.4 | Maitrise des données")
         return True
-    
-    # Commande !setlevel @user niveau (Shield Management)
+
+    # !setlevel @user niveau (Shield Management + Auto Unban)
     if l_msg.startswith('!setlevel '):
         parts = message.split(' ')
-        if len(parts) == 3:
+        if len(parts) >= 3:
             target = parts[1].replace('@', '').lower()
             try:
                 new_lvl = int(parts[2])
-                # On appelle update_user du shield via l'objet bot
+                
+                # Mise à jour dans le Shield (JSON)
                 bot.shield.update_user(target, new_score=new_lvl)
-                bot.send_msg(f"⚙️ [Shield] Le niveau de @{target} est maintenant {new_lvl}.")
+                
+                # Unban Twitch automatique (silencieux)
+                if new_lvl >= 0:
+                    bot.send_msg(f"/unban {target}")
+                
+                bot.send_msg(f"⚙️ Niveau de @{target} actualisé.")
+                
             except ValueError:
-                bot.send_msg(f"❌ Erreur : Le niveau doit être un chiffre (ex: !setlevel @pseudo 2).")
+                bot.send_msg(f"❌ Erreur : Le niveau doit être un chiffre.")
         return True
 
-    # Si aucune commande n'est reconnue
     return False
