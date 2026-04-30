@@ -44,7 +44,7 @@ class DatabaseManager:
 
             print("✅ [DB] Infrastructure prête et synchronisée.")
             
-            # 4. Lancer la migration si un vieux JSON traîne
+            # 4. Lancer la migration
             self.migrate_legacy_data()
             
             return True
@@ -53,40 +53,51 @@ class DatabaseManager:
             return False
 
     def migrate_legacy_data(self):
-        """Transfère music_cache.json vers Supabase si le fichier existe."""
-        json_file = 'music_cache.json'
+        """Transfère music_cache.json vers Supabase."""
+        # On définit le chemin exact que tu m'as donné
+        json_file = '.data/database/music_cache.json'
+        
+        # On vérifie aussi à la racine au cas où
         if not os.path.exists(json_file):
-            return
+            json_file = 'music_cache.json'
+            if not os.path.exists(json_file):
+                return
 
-        print(f"📦 [Migration] Transfert de {json_file} vers Supabase...")
+        print(f"📦 [Migration] Fichier détecté dans : {json_file}")
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            if not data: return
+            if not data:
+                print("[Migration] Le fichier est vide.")
+                return
 
             entries = []
-            # On gère si le JSON est une liste (v1.4.3) ou un dict
+            # Gestion Dict ou Liste
             items = data.items() if isinstance(data, dict) else [(i.get('uri'), i) for i in data if i.get('uri')]
 
             for uri, info in items:
+                if not uri: continue
                 entries.append({
                     "uri": uri,
                     "title": info.get("title", "Unknown"),
                     "artist": info.get("artist", "Unknown"),
                     "yt_id": info.get("yt_id"),
-                    "duration": str(info.get("duration", "0:00")), # On stocke en texte pour le format 0:00
+                    "duration": str(info.get("duration", "0:00")),
                     "is_blacklisted": info.get("is_blacklisted", False),
                     "is_archived": info.get("is_archived", False),
                     self.listened_column: info.get("listened", 0)
                 })
 
-            for i in range(0, len(entries), 100):
-                batch = entries[i:i+100]
-                self.supabase.table(self.music_table).upsert(batch, on_conflict="uri").execute()
+            if entries:
+                print(f"🚀 [Migration] Transfert de {len(entries)} titres vers Supabase...")
+                for i in range(0, len(entries), 100):
+                    batch = entries[i:i+100]
+                    self.supabase.table(self.music_table).upsert(batch, on_conflict="uri").execute()
 
-            os.rename(json_file, f"{json_file}.bak")
-            print(f"🚀 [Migration] Réussie ! {len(entries)} titres importés.")
-
+                # On renomme le fichier pour éviter de migrer à chaque redémarrage
+                os.rename(json_file, f"{json_file}.bak")
+                print(f"✅ [Migration] Terminée. Fichier renommé en .bak")
+            
         except Exception as e:
             print(f"⚠️ [Migration] Erreur : {e}")
