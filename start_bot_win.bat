@@ -46,7 +46,6 @@ echo [SYSTEM] Configuration prete.
 :: ===========================================================
 echo [SYSTEM] Verification des mises a jour sur GitHub...
 if exist ".git" (
-    :: Suppression du reset --hard pour preserver database.py
     git pull origin main >nul 2>&1
     if errorlevel 1 (
         echo [!] Echec de la mise a jour automatique.
@@ -56,7 +55,7 @@ if exist ".git" (
 )
 
 :: ===========================================================
-:: 2. CREATION DU VENV SI NECESSAIRE
+:: 2. CREATION DU VENV SI NECESSAIRE (Priorité 'py')
 :: ===========================================================
 if not exist venv (
     echo [SYSTEM] Environnement virtuel non detecte. Creation...
@@ -72,6 +71,7 @@ if not exist venv (
 :: 3. MISE A JOUR DES DEPENDANCES
 :: ===========================================================
 echo [SYSTEM] Verification des dependances (Quiet mode)...
+:: On utilise py -m pip pour pointer sur le bon moteur si possible
 venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 if exist requirements.txt (
     venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
@@ -92,6 +92,7 @@ echo.
 call venv\Scripts\activate
 
 :loop
+:: Dans un venv active, 'python' est le lien direct vers le moteur du venv
 python main.py
 
 echo.
