@@ -71,7 +71,7 @@ if not exist venv (
 :: 3. MISE A JOUR DES DEPENDANCES
 :: ===========================================================
 echo [SYSTEM] Verification des dependances (Quiet mode)...
-:: On utilise py -m pip pour pointer sur le bon moteur si possible
+:: On force l'utilisation du pip interne au venv pour eviter les conflits
 venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 if exist requirements.txt (
     venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
@@ -88,12 +88,12 @@ echo                BOT TWITCH EST EN LIGNE (v1.5)
 echo ===========================================================
 echo.
 
-:: On active l'environnement au cas ou
-call venv\Scripts\activate
+:: On s'assure d'utiliser le chemin absolu vers le python du venv
+set PYTHON_VENV="%~dp0venv\Scripts\python.exe"
 
 :loop
-:: On tente 'py', puis 'python', puis le chemin direct si rien ne marche
-py main.py || python main.py || venv\Scripts\python.exe main.py
+:: On lance le bot UNIQUEMENT avec le python du venv pour eviter ModuleNotFoundError
+%PYTHON_VENV% main.py
 
 echo.
 echo [!] Le bot s'est arrete (Crash ou Erreur).
