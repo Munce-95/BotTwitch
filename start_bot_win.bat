@@ -88,12 +88,12 @@ echo                BOT TWITCH EST EN LIGNE (v1.5)
 echo ===========================================================
 echo.
 
-:: Activation de l'environnement virtuel
+:: On active l'environnement au cas ou
 call venv\Scripts\activate
 
 :loop
-:: Dans un venv active, 'python' est le lien direct vers le moteur du venv
-python main.py
+:: On tente 'py', puis 'python', puis le chemin direct si rien ne marche
+py main.py || python main.py || venv\Scripts\python.exe main.py
 
 echo.
 echo [!] Le bot s'est arrete (Crash ou Erreur).
