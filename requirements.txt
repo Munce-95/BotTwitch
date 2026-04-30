@@ -1,3 +1,4 @@
 spotipy
 twitchio
 python-dotenv
+supabase
