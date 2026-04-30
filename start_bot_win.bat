@@ -1,5 +1,5 @@
 @echo off
-title Bot Twitch - v1.4.4
+title Bot Twitch - v1.5 (Supabase Ready)
 setlocal enabledelayedexpansion
 
 :: ===========================================================
@@ -46,8 +46,8 @@ echo [SYSTEM] Configuration prete.
 :: ===========================================================
 echo [SYSTEM] Verification des mises a jour sur GitHub...
 if exist ".git" (
-    git reset --hard origin/main >nul 2>&1
-    git pull origin main
+    :: Suppression du reset --hard pour preserver database.py
+    git pull origin main >nul 2>&1
     if errorlevel 1 (
         echo [!] Echec de la mise a jour automatique.
     ) else (
@@ -60,23 +60,23 @@ if exist ".git" (
 :: ===========================================================
 if not exist venv (
     echo [SYSTEM] Environnement virtuel non detecte. Creation...
-    :: On essaie 'py' puis 'python' pour la creation initiale
     py -m venv venv || python -m venv venv
     if errorlevel 1 (
-        echo [!] ERREUR CRITIQUE : Python n'est pas installe sur ce systeme.
+        echo [!] ERREUR CRITIQUE : Python n'est pas installe.
         pause
         exit
     )
 )
 
 :: ===========================================================
-:: 3. MISE A JOUR DES DEPENDANCES (VIA CHEMIN DIRECT)
+:: 3. MISE A JOUR DES DEPENDANCES
 :: ===========================================================
-echo [SYSTEM] Verification des dependances...
-:: On utilise le chemin direct pour eviter l'erreur "python non reconnu"
+echo [SYSTEM] Verification des dependances (Quiet mode)...
 venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 if exist requirements.txt (
     venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
+) else (
+    venv\Scripts\python.exe -m pip install spotipy twitchio python-dotenv supabase --quiet
 )
 
 :: ===========================================================
@@ -84,13 +84,15 @@ if exist requirements.txt (
 :: ===========================================================
 cls
 echo ===========================================================
-echo                BOT TWITCH EST EN LIGNE (v1.4.4)
+echo                BOT TWITCH EST EN LIGNE (v1.5)
 echo ===========================================================
 echo.
 
+:: Activation de l'environnement virtuel
+call venv\Scripts\activate
+
 :loop
-:: L'appel direct qui sauve la mise
-venv\Scripts\python.exe main.py
+python main.py
 
 echo.
 echo [!] Le bot s'est arrete (Crash ou Erreur).
