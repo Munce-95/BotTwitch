@@ -68,16 +68,24 @@ if not exist venv (
 )
 
 :: ===========================================================
-:: 3. MISE A JOUR DES DEPENDANCES
+:: 3. MISE A JOUR DES DEPENDANCES (DOUBLE INSTALLATION)
 :: ===========================================================
 echo [SYSTEM] Verification des dependances (Quiet mode)...
-:: On force l'utilisation du pip interne au venv pour eviter les conflits
-venv\Scripts\python.exe -m pip install --upgrade pip --quiet
+:: Chemin direct pour eviter tout conflit
+set PYTHON_EXE="%~dp0venv\Scripts\python.exe"
+
+:: Mise a jour de pip
+%PYTHON_EXE% -m pip install --upgrade pip --quiet
+
+:: Installation 1 : Le requirements complet
 if exist requirements.txt (
-    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
-) else (
-    venv\Scripts\python.exe -m pip install spotipy twitchio python-dotenv supabase --quiet
+    echo [SYSTEM] Installation via requirements.txt...
+    %PYTHON_EXE% -m pip install -r requirements.txt --quiet
 )
+
+:: Installation 2 : FORCE MODE pour Spotipy (et les essentiels)
+echo [SYSTEM] Securite : Installation forcee de spotipy...
+%PYTHON_EXE% -m pip install spotipy twitchio python-dotenv supabase --quiet
 
 :: ===========================================================
 :: 4. BOUCLE DE LANCEMENT DU BOT
@@ -88,12 +96,9 @@ echo                BOT TWITCH EST EN LIGNE (v1.5)
 echo ===========================================================
 echo.
 
-:: On s'assure d'utiliser le chemin absolu vers le python du venv
-set PYTHON_VENV="%~dp0venv\Scripts\python.exe"
-
 :loop
-:: On lance le bot UNIQUEMENT avec le python du venv pour eviter ModuleNotFoundError
-%PYTHON_VENV% main.py
+:: Lancement via le chemin physique direct defini plus haut
+%PYTHON_EXE% main.py
 
 echo.
 echo [!] Le bot s'est arrete (Crash ou Erreur).
