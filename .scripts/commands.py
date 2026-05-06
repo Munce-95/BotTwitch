@@ -25,7 +25,7 @@ def handle_command(bot, user, message, l_msg, tags, is_privileged):
     
     # !version
     if l_msg == '!version':
-        bot.send_msg(f"@{user} > Bot Version v1.4.4 | Maitrise des données")
+        bot.send_msg(f"@{user} > Bot Version v1.5.10 | Base de données Supabase et Lien YouTube !")
         return True
 
     # !setlevel @user niveau (Shield Management + Auto Unban)

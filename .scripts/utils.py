@@ -1,4 +1,4 @@
-# utils.py - v1.0 | Fonctions utilitaires & Dispatcher
+# utils.py - v1.1 | Fonctions utilitaires & Dispatcher
 import re
 
 def identify_sr_type(user_input):
