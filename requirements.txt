@@ -2,3 +2,4 @@ spotipy
 twitchio
 python-dotenv
 supabase
+google-api-python-client
