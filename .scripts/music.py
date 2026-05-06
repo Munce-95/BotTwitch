@@ -233,9 +233,17 @@ class MusicManager:
             source_type, data = identify_sr_type(query)
             
             if source_type == "YOUTUBE_LINK":
-                asyncio.create_task(self.process_youtube_request(user, data, send_msg))
+                # --- FIX: Récupération de la boucle pour l'asynchrone ---
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = asyncio.get_event_loop()
+                
+                # On planifie l'exécution de la coroutine
+                loop.create_task(self.process_youtube_request(user, data, send_msg))
                 return
 
+            # --- Logique Spotify Classique ---
             track_info = None
             if source_type == "SPOTIFY_LINK":
                 t = self.sp.track(data)
@@ -246,17 +254,33 @@ class MusicManager:
                     t = results['tracks']['items'][0]
                     track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            if not track_info: return send_msg("❌ Musique introuvable.")
-            if track_info['duration'] > 600000: return send_msg(f"⚠️ @{user}, trop long (max 10:00).")
-            if self.is_blacklisted(track_info['uri'], track_info['name']): return send_msg(f"🚫 @{user}, ce titre est banni.")
-            if any(m['uri'] == track_info['uri'] for m in queue_data): return send_msg(f"@{user}, déjà dans la file !")
+            if not track_info: 
+                return send_msg("❌ Musique introuvable.")
+            
+            if track_info['duration'] > 600000: 
+                return send_msg(f"⚠️ @{user}, trop long (max 10:00).")
+            
+            if self.is_blacklisted(track_info['uri'], track_info['name']): 
+                return send_msg(f"🚫 @{user}, ce titre est banni.")
+            
+            if any(m['uri'] == track_info['uri'] for m in queue_data): 
+                return send_msg(f"@{user}, déjà dans la file !")
 
-            queue_data.append({'user': user, 'name': track_info['name'], 'artist': track_info['artist'], 'uri': track_info['uri'], 'duration': track_info['duration']})
+            # Enregistrement
+            queue_data.append({
+                'user': user, 
+                'name': track_info['name'], 
+                'artist': track_info['artist'], 
+                'uri': track_info['uri'], 
+                'duration': track_info['duration']
+            })
             self._save_queue(queue_data)
             self.save_to_cache(track_info['name'], track_info['artist'], track_info['uri'], duration=track_info['duration'])
+            
             send_msg(self._get_msg("sr_msg", user=user, title=track_info['name'], artist=track_info['artist'], pos=len(queue_data)))
             
         except Exception as e:
+            print(f"[SR Error] : {e}")
             send_msg("⚠️ Erreur lors de l'ajout.")
 
     def handle_skip(self, callback):
