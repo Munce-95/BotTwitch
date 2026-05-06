@@ -1,5 +1,5 @@
 # type: ignore
-# music.py - v1.5.10 | YouTube & Spotify Link Fix
+# music.py - v1.5.10 | Final Fix: Unified Threading & Command Handler
 import os
 import json
 import time
@@ -82,7 +82,7 @@ class MusicManager:
             return any(item.get('is_blacklisted') for item in res.data)
         except: return False
 
-    # --- YOUTUBE SPECIFIC ---
+    # --- YOUTUBE INFO ---
     def get_youtube_info(self, video_id):
         try:
             request = self.youtube.videos().list(part="snippet", id=video_id)
@@ -94,37 +94,33 @@ class MusicManager:
 
     # --- CORE PROCESSING (THREADED) ---
     def process_request_async(self, user, source_type, data, send_msg):
-        """Gère Spotify, YouTube et Texte dans un thread séparé pour éviter les crashs."""
+        """Gère Spotify, YouTube et Texte dans un thread séparé."""
         try:
             track_info = None
             yt_id_to_save = None
 
-            # 1. CAS YOUTUBE
             if source_type == "YOUTUBE_LINK":
                 yt_id_to_save = data
                 yt_info = self.get_youtube_info(data)
                 if not yt_info: return send_msg(f"❌ @{user}, lien YouTube invalide.")
-                
                 results = self.sp.search(q=yt_info['search_query'], type='track', limit=1)
                 tracks = results.get('tracks', {}).get('items', [])
                 if not tracks: return send_msg(f"❌ @{user}, introuvable sur Spotify.")
                 t = tracks[0]
                 track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            # 2. CAS SPOTIFY LINK
             elif source_type == "SPOTIFY_LINK":
                 t = self.sp.track(data)
                 track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            # 3. CAS TEXTE
-            else:
+            else: # TEXT_QUERY
                 results = self.sp.search(q=data, type='track', limit=1)
                 if results and results['tracks']['items']:
                     t = results['tracks']['items'][0]
                     track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            # VALIDATION COMMUNE
             if not track_info: return send_msg(f"❌ @{user}, introuvable.")
+            if track_info['duration'] > 600000: return send_msg(f"⚠️ @{user}, trop long.")
             if self.is_blacklisted(track_info['uri'], track_info['name']): return send_msg(f"🚫 @{user}, banni.")
             
             queue_data = self._load_queue()
@@ -138,7 +134,36 @@ class MusicManager:
 
         except Exception as e:
             print(f"Async Error: {e}")
-            send_msg("⚠️ Erreur lors du traitement du lien.")
+            send_msg(f"⚠️ @{user}, erreur lors du traitement.")
+
+    # --- COMMAND HANDLERS ---
+    def process_command(self, user, message, l_msg, tags, is_privileged, callback):
+        if l_msg.startswith('!sr '):
+            self.handle_sr(user, message[4:].strip(), tags, callback)
+        elif l_msg == '!song':
+            curr = self.sp.current_playback()
+            if curr and curr.get('item'):
+                t = curr['item']
+                artist = t['artists'][0].get('name', 'Inconnu')
+                callback(self._get_msg("song_msg", title=t.get('name', 'Sans titre'), artist=artist, timer=format_ms(t.get('duration_ms'))))
+            else: callback(self._get_msg("song_none_msg"))
+        elif l_msg == '!playlist':
+            l_url = f"https://open.spotify.com/playlist/{self.playlist_id}"
+            a_url = f"https://open.spotify.com/playlist/{self.archive_id}"
+            callback(self._get_msg("playlist_msg", live_url=l_url, archive_url=a_url))
+        elif l_msg == '!queue':
+            queue_data = self._load_queue()
+            if not queue_data: callback("📋 La file d'attente est vide.")
+            else:
+                names = [f"{i+1}. {m['name']}" for i, m in enumerate(queue_data[:5])]
+                callback(f"📋 Prochainement ({len(queue_data)}) : {' // '.join(names)}")
+        elif l_msg.startswith('!wrongsong'):
+            self.handle_wrongsong(user, message[10:].strip(), tags, callback)
+        elif l_msg.startswith('!clearqueue') and is_privileged:
+            self.handle_clearqueue(message[11:].strip(), callback)
+        elif l_msg == '!skipsong' and is_privileged:
+            self.handle_skip(callback)
+        return True
 
     def handle_sr(self, user, query, tags, send_msg):
         u_low = user.lower()
@@ -152,60 +177,8 @@ class MusicManager:
         if not is_broadcaster and user_count >= max_allowed:
             return send_msg(f"@{user}, limite de {max_allowed} titres atteinte.")
 
-        try:
-            source_type, data = identify_sr_type(query)
-            
-            # --- CAS YOUTUBE (Thread dédié) ---
-            if source_type == "YOUTUBE_LINK":
-                threading.Thread(
-                    target=lambda: asyncio.run(self.process_youtube_request(user, data, send_msg)),
-                    daemon=True
-                ).start()
-                return
-
-            # --- CAS SPOTIFY / TEXTE (On encapsule aussi pour éviter les blocages) ---
-            def process_spotify():
-                try:
-                    track_info = None
-                    if source_type == "SPOTIFY_LINK":
-                        t = self.sp.track(data)
-                        track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
-                    else: # TEXT_QUERY
-                        results = self.sp.search(q=data, type='track', limit=1)
-                        if results and results['tracks']['items']:
-                            t = results['tracks']['items'][0]
-                            track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
-
-                    if not track_info: 
-                        return send_msg(f"❌ @{user}, musique introuvable.")
-                    
-                    if track_info['duration'] > 600000: 
-                        return send_msg(f"⚠️ @{user}, trop long.")
-                    
-                    if self.is_blacklisted(track_info['uri'], track_info['name']): 
-                        return send_msg(f"🚫 @{user}, banni.")
-                    
-                    # Rechargement de la queue pour éviter les conflits d'écriture
-                    current_queue = self._load_queue()
-                    if any(m['uri'] == track_info['uri'] for m in current_queue): 
-                        return send_msg(f"@{user}, déjà dans la file !")
-
-                    current_queue.append({'user': user, 'name': track_info['name'], 'artist': track_info['artist'], 'uri': track_info['uri'], 'duration': track_info['duration']})
-                    self._save_queue(current_queue)
-                    self.save_to_cache(track_info['name'], track_info['artist'], track_info['uri'], duration=track_info['duration'])
-                    
-                    send_msg(self._get_msg("sr_msg", user=user, title=track_info['name'], artist=track_info['artist'], pos=len(current_queue)))
-                
-                except Exception as e:
-                    print(f"Error in Spotify Thread: {e}")
-                    send_msg(f"⚠️ @{user}, erreur lors de l'ajout.")
-
-            # Lancement du thread Spotify/Texte
-            threading.Thread(target=process_spotify, daemon=True).start()
-            
-        except Exception as e:
-            print(f"Error in handle_sr: {e}")
-            send_msg("⚠️ Erreur lors du traitement de la commande.")
+        source_type, data = identify_sr_type(query)
+        threading.Thread(target=self.process_request_async, args=(user, source_type, data, send_msg), daemon=True).start()
 
     def handle_skip(self, callback):
         try:
@@ -220,7 +193,9 @@ class MusicManager:
             else:
                 self.sp.next_track()
                 callback("⏭️ Skip effectué.")
-        except: callback("❌ Erreur skip.")
+        except Exception as e: 
+            print(f"Skip Error: {e}")
+            callback("❌ Erreur skip.")
 
     def handle_wrongsong(self, user, query, tags, send_msg):
         u_low = user.lower()
@@ -250,7 +225,7 @@ class MusicManager:
 
     def start_worker(self):
         threading.Thread(target=self._main_loop, daemon=True).start()
-        print("🎶 MusicManager v1.5.9 prêt.")
+        print("🎶 MusicManager v1.5.10 prêt.")
 
     def _main_loop(self):
         last_rot = time.time()
@@ -263,7 +238,6 @@ class MusicManager:
                     uri = track.get('uri')
                     remaining = track['duration_ms'] - curr['progress_ms']
                     
-                    # LOGIQUE AUTO-INJECTION (LES 15 SECONDES)
                     queue_data = self._load_queue()
                     if queue_data and remaining < 15000:
                         next_t = queue_data[0]
