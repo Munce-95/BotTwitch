@@ -140,8 +140,31 @@ class TwitchBot(TwitchBase):
 
                     # --- B. RELOAD ---
                     if l_msg.startswith('!reload') and is_privileged:
-                        # (Logique de reload identique, juste s'assurer que self.db est repassé)
-                        pass 
+                        if "all" in l_msg:
+                            reply = self.reload_all()
+                            self.send_msg(reply)
+                        
+                        elif "shield" in l_msg:
+                            importlib.reload(shield)
+                            self.shield = shield.ChatShield(db_manager=self.db)
+                            self.send_msg("🛡️ Module SHIELD rechargé.")
+                            print(f"[{ts}] 🔄 Reload: Shield")
+
+                        elif "music" in l_msg:
+                            if hasattr(self, 'music'):
+                                self.music.running = False # Stop l'ancien worker
+                            importlib.reload(music)
+                            # Ré-initialisation propre de la musique
+                            self.music = music.MusicManager(
+                                sp, os.getenv("PLAYLIST_ID"), os.getenv("ARCHIVE_ID"), 
+                                [a.strip() for a in os.getenv("ADMINS", "").split(",")], 
+                                int(os.getenv("LIMIT_USER", 5)), int(os.getenv("LIMIT_MODO", 10)), 
+                                db_manager=self.db
+                            )
+                            self.music.start_worker()
+                            self.send_msg("🎶 Module MUSIC rechargé.")
+                            print(f"[{ts}] 🔄 Reload: Music")
+                        continue
 
                     # --- C. COMMANDES EXTERNES ---
                     if l_msg.startswith('!'):
