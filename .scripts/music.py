@@ -1,5 +1,5 @@
 # type: ignore
-# music.py - v1.5.6 | YouTube Integration Step 4 - Spotify Bridge
+# music.py - v1.5.9 | Restauration complète + YouTube Fix
 import os
 import json
 import time
@@ -84,6 +84,7 @@ class MusicManager:
             if archived_it is not None: data["is_archived"] = archived_it
             if yt_id: data["yt_id"] = yt_id 
             
+            # Utilisation de l'upsert pour éviter les doublons
             self.db.supabase.table(self.db.music_table).upsert(data, on_conflict="uri").execute()
 
             if increment_listen:
@@ -104,9 +105,8 @@ class MusicManager:
             return any(item.get('is_blacklisted') for item in res.data)
         except: return False
 
-    # --- YOUTUBE LOGIC (ÉTAPE 2, 3 & 4) ---
+    # --- YOUTUBE LOGIC ---
     def check_youtube_db(self, yt_id):
-        """Vérifie l'ID dans la colonne yt_id de Supabase."""
         try:
             res = self.db.supabase.table(self.db.music_table)\
                 .select("is_blacklisted")\
@@ -118,7 +118,6 @@ class MusicManager:
         except: return False
 
     def get_youtube_info(self, video_id):
-        """Récupère le titre et la chaîne via l'API Google."""
         try:
             request = self.youtube.videos().list(part="snippet", id=video_id)
             response = request.execute()
@@ -135,57 +134,42 @@ class MusicManager:
             return None
 
     async def process_youtube_request(self, user, yt_id, send_msg):
-        """Workflow Complet YouTube (Étapes 2, 3 & 4)."""
-        # ÉTAPE 2 : Check Blacklist/DB par ID YT
+        """Workflow YouTube avec Conversion Spotify."""
         if self.check_youtube_db(yt_id):
-            return send_msg(f"🚫 @{user}, ce lien YouTube est banni ou déjà listé.")
+            return send_msg(f"🚫 @{user}, ce lien YouTube est banni.")
 
-        # ÉTAPE 3 : Parsing API YouTube
         yt_data = self.get_youtube_info(yt_id)
         if not yt_data:
-            return send_msg(f"❌ @{user}, lien invalide ou privé sur YouTube.")
+            return send_msg(f"❌ @{user}, lien invalide ou privé.")
 
-        # ÉTAPE 4 : Bridge Spotify (Conversion et Ajout)
         try:
             results = self.sp.search(q=yt_data['search_query'], type='track', limit=1)
             tracks = results.get('tracks', {}).get('items', [])
 
             if not tracks:
-                print(f"[YT] : Link found = {yt_data['title']} // NOT FOUND ON SPOTIFY")
-                return send_msg(f"❌ @{user}, Spotify ne trouve pas d'équivalent pour : {yt_data['title'][:30]}...")
+                return send_msg(f"❌ @{user}, pas d'équivalent Spotify trouvé.")
 
             t = tracks[0]
-            track_info = {
-                'uri': t['uri'], 
-                'name': t['name'], 
-                'artist': t['artists'][0]['name'], 
-                'duration': t['duration_ms']
-            }
+            track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            # Log Terminal Complet pour ton monitoring
-            print(f"[YT] : Link found = {yt_data['title']} // FOUND ON SPOTIFY : {track_info['name']}")
-
-            # Vérification Blacklist Spotify & Doublon Queue
             if self.is_blacklisted(track_info['uri'], track_info['name']):
-                return send_msg(f"🚫 @{user}, cette musique est bannie sur Spotify.")
+                return send_msg(f"🚫 @{user}, cette musique est bannie.")
 
             queue_data = self._load_queue()
             if any(m['uri'] == track_info['uri'] for m in queue_data):
                 return send_msg(f"@{user}, déjà dans la file !")
 
-            # Ajout final à la queue locale
             queue_data.append({'user': user, **track_info})
             self._save_queue(queue_data)
             
-            # Sauvegarde DB avec yt_id (pour que l'étape 2 fonctionne au prochain coup)
             self.save_to_cache(track_info['name'], track_info['artist'], track_info['uri'], 
                                duration=track_info['duration'], yt_id=yt_id)
 
             send_msg(self._get_msg("sr_msg", user=user, title=track_info['name'], artist=track_info['artist'], pos=len(queue_data)))
 
         except Exception as e:
-            print(f"Error in Step 4: {e}")
-            send_msg("⚠️ Erreur lors de la conversion Spotify.")
+            print(f"Error Step 4: {e}")
+            send_msg("⚠️ Erreur lors de la conversion.")
 
     # --- COMMANDES ---
     def process_command(self, user, message, l_msg, tags, is_privileged, callback):
@@ -233,17 +217,13 @@ class MusicManager:
             source_type, data = identify_sr_type(query)
             
             if source_type == "YOUTUBE_LINK":
-                # --- FIX: Récupération de la boucle pour l'asynchrone ---
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = asyncio.get_event_loop()
-                
-                # On planifie l'exécution de la coroutine
-                loop.create_task(self.process_youtube_request(user, data, send_msg))
+                # FIX CRITIQUE: Threading forcé pour éviter le blocage
+                threading.Thread(
+                    target=lambda: asyncio.run(self.process_youtube_request(user, data, send_msg)),
+                    daemon=True
+                ).start()
                 return
 
-            # --- Logique Spotify Classique ---
             track_info = None
             if source_type == "SPOTIFY_LINK":
                 t = self.sp.track(data)
@@ -254,33 +234,17 @@ class MusicManager:
                     t = results['tracks']['items'][0]
                     track_info = {'uri': t['uri'], 'name': t['name'], 'artist': t['artists'][0]['name'], 'duration': t['duration_ms']}
 
-            if not track_info: 
-                return send_msg("❌ Musique introuvable.")
-            
-            if track_info['duration'] > 600000: 
-                return send_msg(f"⚠️ @{user}, trop long (max 10:00).")
-            
-            if self.is_blacklisted(track_info['uri'], track_info['name']): 
-                return send_msg(f"🚫 @{user}, ce titre est banni.")
-            
-            if any(m['uri'] == track_info['uri'] for m in queue_data): 
-                return send_msg(f"@{user}, déjà dans la file !")
+            if not track_info: return send_msg("❌ Musique introuvable.")
+            if track_info['duration'] > 600000: return send_msg(f"⚠️ @{user}, trop long.")
+            if self.is_blacklisted(track_info['uri'], track_info['name']): return send_msg(f"🚫 @{user}, banni.")
+            if any(m['uri'] == track_info['uri'] for m in queue_data): return send_msg(f"@{user}, déjà dans la file !")
 
-            # Enregistrement
-            queue_data.append({
-                'user': user, 
-                'name': track_info['name'], 
-                'artist': track_info['artist'], 
-                'uri': track_info['uri'], 
-                'duration': track_info['duration']
-            })
+            queue_data.append({'user': user, 'name': track_info['name'], 'artist': track_info['artist'], 'uri': track_info['uri'], 'duration': track_info['duration']})
             self._save_queue(queue_data)
             self.save_to_cache(track_info['name'], track_info['artist'], track_info['uri'], duration=track_info['duration'])
-            
             send_msg(self._get_msg("sr_msg", user=user, title=track_info['name'], artist=track_info['artist'], pos=len(queue_data)))
             
         except Exception as e:
-            print(f"[SR Error] : {e}")
             send_msg("⚠️ Erreur lors de l'ajout.")
 
     def handle_skip(self, callback):
@@ -326,7 +290,7 @@ class MusicManager:
 
     def start_worker(self):
         threading.Thread(target=self._main_loop, daemon=True).start()
-        print("🎶 MusicManager v1.5.6 prêt.")
+        print("🎶 MusicManager v1.5.9 prêt.")
 
     def _main_loop(self):
         last_rot = time.time()
@@ -338,6 +302,8 @@ class MusicManager:
                     track = curr['item']
                     uri = track.get('uri')
                     remaining = track['duration_ms'] - curr['progress_ms']
+                    
+                    # LOGIQUE AUTO-INJECTION (LES 15 SECONDES)
                     queue_data = self._load_queue()
                     if queue_data and remaining < 15000:
                         next_t = queue_data[0]
@@ -347,10 +313,12 @@ class MusicManager:
                             injected_uris.add(next_t['uri'])
                             queue_data.pop(0)
                             self._save_queue(queue_data)
+                    
                     if uri != self.last_track_uri:
                         self.last_track_uri = uri
                         injected_uris.clear()
                         self.save_to_cache(track.get('name'), track['artists'][0].get('name'), uri, duration=track.get('duration_ms'), increment_listen=True)
+                
                 if time.time() - last_rot > 1800:
                     last_rot = time.time()
             except: pass
