@@ -40,26 +40,29 @@ class ChatShield:
     def update_user(self, user, is_privileged=False, new_score=None):
         """Gestionnaire centralisé des viewers en base de données."""
         user = user.lower()
-        today = datetime.now().strftime("%Y-%m-%d")
+        if not user: return # Sécurité supplémentaire
         
+        today = datetime.now().strftime("%Y-%m-%d")
         current = self.get_user_data(user)
+        
+        # Initialisation du dictionnaire avec le username TOUJOURS présent
+        data = {"username": user} 
         
         if not current:
             # Création du nouveau viewer
-            data = {
-                "username": user,
+            data.update({
                 "level": 3 if is_privileged else 1,
                 "messages": 1,
                 "last_seen": today,
                 "is_banned": False,
                 "safe_messages_count": 0
-            }
+            })
         else:
             # Mise à jour
-            data = {
+            data.update({
                 "last_seen": today,
                 "messages": current["messages"] + 1
-            }
+            })
             
             if new_score is not None:
                 data["level"] = new_score
@@ -79,7 +82,8 @@ class ChatShield:
                 data["level"] = 2
 
         try:
-            self.db.supabase.table(self.db.viewer_table).upsert(data).execute()
+            # L'upsert se basera sur le username pour savoir s'il doit update ou insert
+            self.db.supabase.table(self.db.viewer_table).upsert(data, on_conflict="username").execute()
         except Exception as e:
             print(f"[SHIELD DB ERROR] {e}")
 
